@@ -78,11 +78,17 @@ python -m pip install -U yt-dlp
 
 ## 🛠️ Installation & Setup
 
-Clone this repository and enter the directory:
+### First-Time Clone
 ```bash
 git clone https://github.com/Zoro-15/Music.yt.Spot.git
 cd Music.yt.Spot
 python -m pip install -r requirements.txt
+```
+
+### Updating Existing Installation
+If you already cloned the repository, update to the latest code anytime by running:
+```bash
+cd Music.yt.Spot && git pull
 ```
 
 ---
