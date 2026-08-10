@@ -1,5 +1,5 @@
 import json
-from downloader.utils import normalize, words, run_command
+from downloader.utils import normalize, words, run_command, get_ytdlp_auth_args
 
 SEARCH_COUNT = 5
 MIN_SCORE = 70
@@ -115,8 +115,7 @@ def search_youtube(title, artists, count=SEARCH_COUNT, min_score=MIN_SCORE, use_
             "yt-dlp",
             "--flat-playlist",
             "--dump-single-json",
-            f"ytsearch{count}:{query}",
-        ]
+        ] + get_ytdlp_auth_args() + [f"ytsearch{count}:{query}"]
 
         code, stdout, stderr = run_command(cmd)
         if code != 0:

@@ -18,6 +18,7 @@ from downloader.utils import (
     sanitize_filename,
     print_banner,
     sync_to_android_music,
+    get_ytdlp_auth_args,
 )
 
 # Thread-safety lock for writing progress state and logs
@@ -126,6 +127,7 @@ def process_single_track(row, index, cfg):
         "--add-metadata",
         "--write-thumbnail",
         "--embed-thumbnail",
+    ] + get_ytdlp_auth_args() + [
         "-o", output_template,
         best["url"],
     ]
@@ -144,6 +146,7 @@ def process_single_track(row, index, cfg):
             "--continue",
             "-f", "ba[ext=m4a]/ba[ext=webm]/ba",
             "--write-thumbnail",
+        ] + get_ytdlp_auth_args() + [
             "-o", output_template,
             best["url"],
         ]

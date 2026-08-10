@@ -8,6 +8,7 @@ from downloader.utils import (
     sanitize_filename,
     print_banner,
     sync_to_android_music,
+    get_ytdlp_auth_args,
 )
 
 
@@ -62,6 +63,7 @@ def search_and_download_song(query):
         "--add-metadata",
         "--embed-thumbnail",
         "--write-thumbnail",
+    ] + get_ytdlp_auth_args() + [
         "-o", output_template,
         best["url"],
     ]

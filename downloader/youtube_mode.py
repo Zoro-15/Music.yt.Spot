@@ -6,6 +6,7 @@ from downloader.utils import (
     run_command,
     print_banner,
     sync_to_android_music,
+    get_ytdlp_auth_args,
 )
 
 
@@ -57,6 +58,7 @@ def download_youtube_playlist(url):
         "--add-metadata",
         "--embed-thumbnail",
         "--write-thumbnail",
+    ] + get_ytdlp_auth_args() + [
         "-o", output_template,
         url,
     ]
@@ -105,6 +107,7 @@ def download_youtube_video(url):
         "--add-metadata",
         "--embed-thumbnail",
         "--write-thumbnail",
+    ] + get_ytdlp_auth_args() + [
         "-o", output_template,
         url,
     ]

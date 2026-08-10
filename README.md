@@ -8,7 +8,6 @@ A high-performance, multi-threaded **Android / Termux** tool for downloading aud
 
 - 🔎 **Search & Download Song by Name**: Download any track by typing its name (`python main.py search "Song Name"`). The script automatically finds the best YouTube Music match, downloads native audio, crops 1:1 cover art, embeds metadata, fetches synced lyrics, and syncs to Android Music.
 - 🔗 **Universal Link Downloader**: Directly handles YouTube Playlists, YouTube Music Playlists, YouTube Music Albums (`music.youtube.com/playlist?list=...`), Music Videos, and single videos.
-- 📱 **Modern Android Web GUI**: Launch a sleek Spotify-styled glassmorphism Web App on your phone (`python gui.py`) with 1-click JSON discovery, real-time progress bars, live track tables, song search, link downloader, and setting toggles.
 - ⚡ **8x Parallel Downloads by Default**: Multi-threaded processing (`8` concurrent workers) slashes download times by up to 80%.
 - 🎵 **YouTube Music (YTM) Topic Priority**: Multi-pass search targets official YouTube Music topic tracks (`ytmusic:`) first, eliminating intro/outro video skits.
 - 🎤 **Synchronized Lyrics (.lrc)**: Integrates with LRCLIB to fetch synchronized lyrics alongside audio files.
@@ -88,16 +87,6 @@ python -m pip install -r requirements.txt
 
 ---
 
-## 📱 Launch Android Web GUI (Recommended)
-
-Simply run:
-```bash
-python gui.py
-```
-This automatically starts the local server and opens the modern **Spotify Glassmorphism Web App** in your phone's browser (`http://127.0.0.1:8000`).
-
----
-
 ## 🧹 Reset & Clean Cache (Optional)
 
 Before starting a fresh playlist download, you can clear previous CSV files, progress logs, cache, and temporary data by running:
@@ -159,6 +148,16 @@ python main.py link "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 1. Open [Exportify](https://exportify.madebyruuen.com/) in your browser.
 2. Log in and export your Spotify playlist as **JSON**.
 3. The downloaded JSON file (e.g., `Gedi.json` or `playlist.json`) lands on your phone/computer.
+
+#### Troubleshooting Common Issues
+| Issue | Cause & Solution |
+| :--- | :--- |
+| `Sign in to confirm you're not a bot` | **Fixed automatically** using iOS/Android player client args. If YouTube challenges your IP address, export a `cookies.txt` file (using the *Get cookies.txt LOCALLY* browser extension) and place it in the project folder! |
+| `yt-dlp: command not found` | Run `python -m pip install -U yt-dlp` |
+| `ffmpeg: command not found` | Run `pkg install ffmpeg -y` in Termux |
+| `HTTP Error 403: Forbidden` | Built-in retries (`--retries 5 --retry-sleep 2`) handle temporary YouTube rate limits automatically |
+| `No JSON found in input/` | Place your Exportify JSON in `input/` or ensure Termux storage permission is granted (`termux-setup-storage`) |
+| Interrupted download | Simply rerun `python main.py` or `python download.py`. Completed tracks are skipped automatically |
 
 #### Step 2: Provide the JSON to the Script (3 Easy Methods)
 

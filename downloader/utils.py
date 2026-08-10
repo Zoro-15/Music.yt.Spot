@@ -44,7 +44,18 @@ def run_command(cmd, cwd=None):
         )
         return result.returncode, result.stdout, result.stderr
     except Exception as e:
-        return 1, "", str(e)
+def get_ytdlp_auth_args():
+    """
+    Returns authentication / player client arguments for yt-dlp.
+    Checks for cookies.txt in project root, input/, or data/.
+    If cookies.txt exists, passes --cookies.
+    Otherwise passes --extractor-args youtube:player_client=ios,android,mweb to bypass YouTube bot checks.
+    """
+    for c_path in [BASE_DIR / "cookies.txt", INPUT_DIR / "cookies.txt", DATA_DIR / "cookies.txt"]:
+        if c_path.exists() and c_path.is_file():
+            return ["--cookies", str(c_path)]
+
+    return ["--extractor-args", "youtube:player_client=ios,android,mweb"]
 
 
 # ============================================================

@@ -24,9 +24,10 @@ output/*
 *.tmp
 *.temp
 
-# System / OS metadata
+# System / OS / Auth metadata
 .DS_Store
 Thumbs.db
+cookies.txt
 .env
 .venv/
 env/
