@@ -67,24 +67,31 @@ def get_ytdlp_auth_args():
     Auto-discovers cookies.txt in project root, input/, data/, or Android Downloads folders.
     Otherwise uses Android YouTube app User-Agent + player_client=android,ios to bypass YouTube bot checks.
     """
-    # 1. Search project directories for cookies.txt
-    for c_path in [BASE_DIR / "cookies.txt", INPUT_DIR / "cookies.txt", DATA_DIR / "cookies.txt"]:
-        if c_path.exists() and c_path.is_file():
-            return ["--cookies", str(c_path)]
+    # 1. Search project directories for any *cookie*.txt file
+    for p_dir in [BASE_DIR, INPUT_DIR, DATA_DIR]:
+        try:
+            found = [f for f in p_dir.glob("*.txt") if "cookie" in f.name.lower()]
+            if found:
+                return ["--cookies", str(found[0])]
+        except Exception:
+            pass
 
-    # 2. Search Android Downloads folders for cookies.txt
+    # 2. Search Android Downloads folders for any *cookie*.txt file
     for d_dir in find_downloads_dirs():
-        for name in ["cookies.txt", "youtube.com_cookies.txt", "youtube_cookies.txt"]:
-            dl_cookies = d_dir / name
-            if dl_cookies.exists() and dl_cookies.is_file():
+        try:
+            found_cookies = [f for f in d_dir.glob("*.txt") if "cookie" in f.name.lower()]
+            if found_cookies:
+                selected_cookie = found_cookies[0]
                 dest = DATA_DIR / "cookies.txt"
                 try:
                     import shutil
-                    shutil.copy2(dl_cookies, dest)
-                    print(f" ✓ Auto-discovered cookies in Downloads: {dl_cookies.name}")
+                    shutil.copy2(selected_cookie, dest)
+                    print(f" ✓ Auto-discovered cookies in Downloads: {selected_cookie.name}")
                     return ["--cookies", str(dest)]
                 except Exception:
-                    return ["--cookies", str(dl_cookies)]
+                    return ["--cookies", str(selected_cookie)]
+        except Exception:
+            pass
 
     # 3. Android VR & Web Creator Player Client (Zero Bot-Check Client)
     return [
