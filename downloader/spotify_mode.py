@@ -166,6 +166,14 @@ def process_single_track(row, index, cfg):
     return "success", best
 
 
+def download_single_spotify_track(row, index):
+    """
+    Wrapper alias for processing a single Spotify track entry.
+    """
+    cfg = load_config()
+    return process_single_track(row, index, cfg)
+
+
 def run_download():
     """
     Main multi-threaded download runner for Spotify playlist tracks.
