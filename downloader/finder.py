@@ -1,7 +1,7 @@
 import json
 import shutil
 from pathlib import Path
-from downloader.utils import INPUT_DIR
+from downloader.utils import INPUT_DIR, BASE_DIR
 
 
 def is_valid_exportify_json(file_path):
