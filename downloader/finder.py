@@ -1,7 +1,7 @@
 import json
 import shutil
 from pathlib import Path
-from downloader.utils import INPUT_DIR, BASE_DIR
+from downloader.utils import INPUT_DIR, BASE_DIR, find_downloads_dirs
 
 
 def is_valid_exportify_json(file_path):
@@ -20,20 +20,6 @@ def is_valid_exportify_json(file_path):
     except Exception:
         pass
     return False
-
-
-def find_downloads_dirs():
-    """
-    Returns candidate download paths for Termux / Android.
-    """
-    home = Path.home()
-    candidates = [
-        home / "storage" / "downloads",
-        home / "storage" / "shared" / "Download",
-        Path("/sdcard/Download"),
-        Path("/storage/emulated/0/Download"),
-    ]
-    return [d for d in candidates if d.exists() and d.is_dir()]
 
 
 def discover_playlist_json(provided_path=None):

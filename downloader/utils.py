@@ -47,6 +47,20 @@ def run_command(cmd, cwd=None):
         return 1, "", str(e)
 
 
+def find_downloads_dirs():
+    """
+    Returns candidate download paths for Termux / Android.
+    """
+    home = Path.home()
+    candidates = [
+        home / "storage" / "downloads",
+        home / "storage" / "shared" / "Download",
+        Path("/sdcard/Download"),
+        Path("/storage/emulated/0/Download"),
+    ]
+    return [d for d in candidates if d.exists() and d.is_dir()]
+
+
 def get_ytdlp_auth_args():
     """
     Returns authentication / player client arguments for yt-dlp.
