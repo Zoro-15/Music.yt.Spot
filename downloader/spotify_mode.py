@@ -152,7 +152,7 @@ def process_single_track(row, index, cfg):
 
     code, stdout, stderr = run_command(cmd)
 
-    # Fallback retry without --embed-thumbnail if thumbnail embedding caused a failure
+    # Multi-pass fallback retries for bot checks or thumbnail embedding issues
     if code != 0:
         fallback_cmd = [
             "yt-dlp",
@@ -169,6 +169,40 @@ def process_single_track(row, index, cfg):
             best["url"],
         ]
         code, stdout, stderr = run_command(fallback_cmd)
+
+    if code != 0:
+        fallback_cmd2 = [
+            "yt-dlp",
+            "--no-playlist",
+            "--retries", "5",
+            "--fragment-retries", "5",
+            "--retry-sleep", "2",
+            "--socket-timeout", "30",
+            "--continue",
+            "-f", "bestaudio/best",
+            "--write-thumbnail",
+            "--extractor-args", "youtube:player_client=mweb,android",
+            "-o", output_template,
+            best["url"],
+        ]
+        code, stdout, stderr = run_command(fallback_cmd2)
+
+    if code != 0:
+        fallback_cmd3 = [
+            "yt-dlp",
+            "--no-playlist",
+            "--retries", "5",
+            "--fragment-retries", "5",
+            "--retry-sleep", "2",
+            "--socket-timeout", "30",
+            "--continue",
+            "-f", "bestaudio/best",
+            "--write-thumbnail",
+            "--extractor-args", "youtube:player_client=ios,mweb",
+            "-o", output_template,
+            best["url"],
+        ]
+        code, stdout, stderr = run_command(fallback_cmd3)
 
     if code != 0:
         last_err = stderr.strip().splitlines()[-1] if stderr and stderr.strip() else "Unknown error"
