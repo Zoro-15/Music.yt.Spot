@@ -53,21 +53,30 @@ def discover_playlist_json(provided_path=None):
     # 1. Search input/ directory
     input_jsons = [f for f in INPUT_DIR.glob("*.json") if is_valid_exportify_json(f)]
     
-    if len(input_jsons) == 1:
-        print(f"Found playlist JSON in input/: {input_jsons[0].name}")
-        return input_jsons[0]
-    elif len(input_jsons) > 1:
-        print("\nMultiple playlist JSON files found in input/:")
-        for idx, f in enumerate(input_jsons, 1):
-            print(f" [{idx}] {f.name}")
+    # 1b. Search project root directory (BASE_DIR) for JSON files like Gedi.json
+    root_jsons = [
+        f for f in BASE_DIR.glob("*.json")
+        if f.name != "config.json" and is_valid_exportify_json(f)
+    ]
+    
+    all_local_jsons = input_jsons + [f for f in root_jsons if f not in input_jsons]
+    
+    if len(all_local_jsons) == 1:
+        print(f"Found playlist JSON: {all_local_jsons[0].name}")
+        return all_local_jsons[0]
+    elif len(all_local_jsons) > 1:
+        print("\nMultiple playlist JSON files found:")
+        for idx, f in enumerate(all_local_jsons, 1):
+            loc = "input/" if f.parent == INPUT_DIR else "root folder"
+            print(f" [{idx}] {f.name} ({loc})")
         choice = input("\nSelect JSON file number (or press Enter for 1): ").strip()
         try:
             sel_idx = int(choice) - 1 if choice else 0
-            if 0 <= sel_idx < len(input_jsons):
-                return input_jsons[sel_idx]
+            if 0 <= sel_idx < len(all_local_jsons):
+                return all_local_jsons[sel_idx]
         except ValueError:
             pass
-        return input_jsons[0]
+        return all_local_jsons[0]
 
     # 2. Search Termux/Android Downloads folders
     print("No JSON found in input/. Searching Termux storage downloads...")
