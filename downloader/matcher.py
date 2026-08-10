@@ -96,16 +96,11 @@ def search_youtube(title, artists, count=SEARCH_COUNT, min_score=MIN_SCORE, use_
     and returns sorted, scored candidates.
     """
     search_queries = []
-    
-    if use_ytmusic:
-        # Pass 1: YTM Topic search priority
-        search_queries.append(f"ytmusic:{artists} - {title}")
-    
-    # Pass 2: Standard YT search
-    search_queries.append(f"{artists} - {title}")
-    
-    # Pass 3: Official Audio fallback
-    search_queries.append(f"{title} - {artists} Official Audio")
+    if artists:
+        search_queries.append(f"{artists} - {title}")
+        search_queries.append(f"{artists} {title} Audio")
+    search_queries.append(f"{title} Official Audio")
+    search_queries.append(f"{title}")
 
     all_candidates = []
     seen_urls = set()
