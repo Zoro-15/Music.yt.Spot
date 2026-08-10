@@ -124,16 +124,34 @@ def process_single_track(row, index, cfg):
         # Native audio priority: M4A/AAC > WebM/Opus > best audio
         "-f", "ba[ext=m4a]/ba[ext=webm]/ba",
         "--add-metadata",
-        "--embed-thumbnail",
         "--write-thumbnail",
+        "--embed-thumbnail",
         "-o", output_template,
         best["url"],
     ]
 
     code, stdout, stderr = run_command(cmd)
 
+    # Fallback retry without --embed-thumbnail if thumbnail embedding caused a failure
     if code != 0:
-        print(f"[{index:03d}] ✖ Download failed")
+        fallback_cmd = [
+            "yt-dlp",
+            "--no-playlist",
+            "--retries", "5",
+            "--fragment-retries", "5",
+            "--retry-sleep", "2",
+            "--socket-timeout", "30",
+            "--continue",
+            "-f", "ba[ext=m4a]/ba[ext=webm]/ba",
+            "--write-thumbnail",
+            "-o", output_template,
+            best["url"],
+        ]
+        code, stdout, stderr = run_command(fallback_cmd)
+
+    if code != 0:
+        last_err = stderr.strip().splitlines()[-1] if stderr and stderr.strip() else "Unknown error"
+        print(f"[{index:03d}] ✖ Download failed: {last_err}")
         return "failed", stderr
 
     # Locate downloaded media files
