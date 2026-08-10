@@ -126,14 +126,50 @@ Download YouTube playlists, YouTube Music playlists, YouTube Music albums, or vi
 python main.py link "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 ```
 
----
-
 ### Spotify Playlist Mode (5x Parallel)
-Export your Spotify playlist using [Exportify](https://exportify.madebyruuen.com/) and run:
+
+#### Step 1: Export Spotify Playlist as JSON
+1. Open [Exportify](https://exportify.madebyruuen.com/) in your browser.
+2. Log in and export your Spotify playlist as **JSON**.
+3. The downloaded JSON file (e.g., `Gedi.json` or `playlist.json`) lands on your phone/computer.
+
+#### Step 2: Provide the JSON to the Script (3 Easy Methods)
+
+Choose **any** of the following 3 ways to provide your JSON file:
+
+- **Method A — Automatic Downloads Discovery (Easiest for Android / Termux)**:
+  Leave the exported JSON right in your phone's `Downloads` folder (`~/storage/downloads/`). Simply run:
+  ```bash
+  python main.py spotify
+  ```
+  *The script will automatically detect and use the Exportify JSON from your Downloads folder!*
+
+- **Method B — Place in Project Directory or `input/` Folder**:
+  Copy or move your JSON file (e.g. `Gedi.json`) into the `input/` folder or directly into the `Music.yt.Spot` repository folder:
+  ```text
+  Music.yt.Spot/
+  ├── Gedi.json   <-- (or inside input/Gedi.json)
+  ```
+  Then run:
+  ```bash
+  python main.py spotify
+  ```
+
+- **Method C — Pass File Path via Command Line**:
+  Specify your JSON filename or file path directly when running the command:
+  ```bash
+  python main.py spotify Gedi.json
+  ```
+  or
+  ```bash
+  python main.py spotify /sdcard/Download/Gedi.json
+  ```
+
+#### Prevent Termux Sleep During Downloads (Recommended for Large Playlists)
 ```bash
-python main.py spotify
+termux-wake-lock
 ```
-*Auto-discovers JSON in `input/` or your Android `Downloads` folder.*
+*(When finished: `termux-wake-unlock`)*
 
 ---
 
