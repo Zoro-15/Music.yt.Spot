@@ -80,8 +80,8 @@ python -m pip install -U yt-dlp
 
 Clone this repository and enter the directory:
 ```bash
-git clone https://github.com/YOUR_USERNAME/spotify-ytdlp-downloader.git
-cd spotify-ytdlp-downloader
+git clone https://github.com/Zoro-15/Music.yt.Spot.git
+cd Music.yt.Spot
 python -m pip install -r requirements.txt
 ```
 
