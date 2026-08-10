@@ -38,11 +38,8 @@ def find_downloads_dirs():
 
 def discover_playlist_json(provided_path=None):
     """
-    Discovers an Exportify JSON playlist file.
-    Order of search:
-    1. Provided path (if user passed CLI argument)
-    2. input/ directory
-    3. Android Downloads folders (~/storage/downloads/)
+    Discovers Exportify JSON playlist files across input/, project root, and Android Downloads folders,
+    and presents a numbered selection menu to the user.
     """
     if provided_path:
         p = Path(provided_path).resolve()
@@ -50,68 +47,55 @@ def discover_playlist_json(provided_path=None):
             return p
         print(f"WARNING: Specified file '{provided_path}' does not exist or is not a valid Exportify JSON.")
 
+    all_found = []
+    seen_paths = set()
+
     # 1. Search input/ directory
-    input_jsons = [f for f in INPUT_DIR.glob("*.json") if is_valid_exportify_json(f)]
-    
-    # 1b. Search project root directory (BASE_DIR) for JSON files like Gedi.json
-    root_jsons = [
-        f for f in BASE_DIR.glob("*.json")
-        if f.name != "config.json" and is_valid_exportify_json(f)
-    ]
-    
-    all_local_jsons = input_jsons + [f for f in root_jsons if f not in input_jsons]
-    
-    if len(all_local_jsons) == 1:
-        print(f"Found playlist JSON: {all_local_jsons[0].name}")
-        return all_local_jsons[0]
-    elif len(all_local_jsons) > 1:
-        print("\nMultiple playlist JSON files found:")
-        for idx, f in enumerate(all_local_jsons, 1):
-            loc = "input/" if f.parent == INPUT_DIR else "root folder"
-            print(f" [{idx}] {f.name} ({loc})")
-        choice = input("\nSelect JSON file number (or press Enter for 1): ").strip()
-        try:
-            sel_idx = int(choice) - 1 if choice else 0
-            if 0 <= sel_idx < len(all_local_jsons):
-                return all_local_jsons[sel_idx]
-        except ValueError:
-            pass
-        return all_local_jsons[0]
+    for f in INPUT_DIR.glob("*.json"):
+        if is_valid_exportify_json(f) and f.resolve() not in seen_paths:
+            all_found.append((f, "input/"))
+            seen_paths.add(f.resolve())
 
-    # 2. Search Termux/Android Downloads folders
-    print("No JSON found in input/. Searching Termux storage downloads...")
-    downloads_dirs = find_downloads_dirs()
-    found_in_downloads = []
+    # 2. Search project root directory (BASE_DIR)
+    for f in BASE_DIR.glob("*.json"):
+        if f.name != "config.json" and is_valid_exportify_json(f) and f.resolve() not in seen_paths:
+            all_found.append((f, "project root"))
+            seen_paths.add(f.resolve())
 
-    for d_dir in downloads_dirs:
+    # 3. Search Android Downloads folders
+    for d_dir in find_downloads_dirs():
         for f in d_dir.glob("*.json"):
-            if is_valid_exportify_json(f):
-                found_in_downloads.append(f)
+            if is_valid_exportify_json(f) and f.resolve() not in seen_paths:
+                all_found.append((f, "Downloads"))
+                seen_paths.add(f.resolve())
 
-    if len(found_in_downloads) == 1:
-        target = found_in_downloads[0]
-        dest = INPUT_DIR / target.name
-        print(f"Discovered Exportify JSON in Downloads: {target.name}")
-        print(f"Copying to input/{target.name}...")
+    if not all_found:
+        return None
+
+    print("\n" + "=" * 60)
+    print(" Available Spotify Playlist JSON Files Found:")
+    print("=" * 60)
+    for idx, (f_path, location) in enumerate(all_found, 1):
+        print(f"  [{idx}] {f_path.name}  (Location: {location})")
+    print("=" * 60)
+
+    choice = input(f"\nSelect JSON file number [1-{len(all_found)}] (or press Enter for 1): ").strip()
+    sel_idx = 0
+    if choice and choice.isdigit():
+        val = int(choice) - 1
+        if 0 <= val < len(all_found):
+            sel_idx = val
+
+    selected_file, location = all_found[sel_idx]
+    print(f"\nSelected: {selected_file.name} ({location})")
+
+    if location == "Downloads":
+        dest = INPUT_DIR / selected_file.name
         try:
-            shutil.copy2(target, dest)
+            shutil.copy2(selected_file, dest)
             return dest
-        except Exception as e:
-            print(f"Could not copy file: {e}")
-            return target
-    elif len(found_in_downloads) > 1:
-        print("\nDiscovered multiple Exportify JSON files in Downloads:")
-        for idx, f in enumerate(found_in_downloads, 1):
-            print(f" [{idx}] {f.name} ({f.parent})")
-        choice = input("\nSelect JSON file number to use: ").strip()
-        try:
-            sel_idx = int(choice) - 1
-            if 0 <= sel_idx < len(found_in_downloads):
-                target = found_in_downloads[sel_idx]
-                dest = INPUT_DIR / target.name
-                shutil.copy2(target, dest)
-                return dest
         except Exception:
-            pass
+            return selected_file
 
-    return None
+    return selected_file
+

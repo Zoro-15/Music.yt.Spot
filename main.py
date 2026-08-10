@@ -30,7 +30,9 @@ def interactive_menu():
         if choice == "1":
             print("\nPreparing Spotify playlist JSON...")
             if prepare_csv():
-                run_download()
+                start = input("\nStart downloading playlist tracks now? [Y/n]: ").strip()
+                if start.lower() != "n":
+                    run_download()
             break
         elif choice == "2":
             query = input("\nEnter Song Name or Search Query: ").strip()
