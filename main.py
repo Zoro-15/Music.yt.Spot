@@ -67,7 +67,7 @@ Termux Playlist Audio Downloader — Usage Guide:
 Interactive Mode:
   python main.py
 
-Spotify JSON Mode (5x Parallel Default):
+Spotify JSON Mode (8x Parallel Default):
   python main.py spotify [optional_path_to_exportify_json]
 
 Search Song by Name:

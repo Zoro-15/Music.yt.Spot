@@ -5,7 +5,7 @@ from downloader.utils import BASE_DIR
 CONFIG_FILE = BASE_DIR / "config.json"
 
 DEFAULT_CONFIG = {
-    "max_workers": 5,
+    "max_workers": 8,
     "min_score": 70,
     "ytmusic_priority": True,
     "fetch_lyrics": True,

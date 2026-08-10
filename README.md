@@ -8,7 +8,7 @@ A high-performance, multi-threaded **Android / Termux** tool for downloading aud
 
 - 🔎 **Search & Download Song by Name**: Download any track by typing its name (`python main.py search "Song Name"`). The script automatically finds the best YouTube Music match, downloads native audio, crops 1:1 cover art, embeds metadata, fetches synced lyrics, and syncs to Android Music.
 - 🔗 **Universal Link Downloader**: Directly handles YouTube Playlists, YouTube Music Playlists, YouTube Music Albums (`music.youtube.com/playlist?list=...`), Music Videos, and single videos.
-- ⚡ **5x Parallel Downloads by Default**: Multi-threaded processing (`5` concurrent workers) slashes download times by up to 70%.
+- ⚡ **8x Parallel Downloads by Default**: Multi-threaded processing (`8` concurrent workers) slashes download times by up to 80%.
 - 🎵 **YouTube Music (YTM) Topic Priority**: Multi-pass search targets official YouTube Music topic tracks (`ytmusic:`) first, eliminating intro/outro video skits.
 - 🎤 **Synchronized Lyrics (.lrc)**: Integrates with LRCLIB to fetch synchronized lyrics alongside audio files.
 - 🖼️ **1:1 Square Cover Art Cropping**: Automatically crops 16:9 YouTube thumbnails to a 1:1 square aspect ratio via FFmpeg to prevent letterboxing on mobile player screens.
@@ -142,7 +142,7 @@ Download YouTube playlists, YouTube Music playlists, YouTube Music albums, or vi
 python main.py link "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 ```
 
-### Spotify Playlist Mode (5x Parallel)
+### Spotify Playlist Mode (8x Parallel)
 
 #### Step 1: Export Spotify Playlist as JSON
 1. Open [Exportify](https://exportify.madebyruuen.com/) in your browser.
@@ -202,7 +202,7 @@ python main.py review
 Created automatically on first run:
 ```json
 {
-  "max_workers": 5,
+  "max_workers": 8,
   "min_score": 70,
   "ytmusic_priority": true,
   "fetch_lyrics": true,
