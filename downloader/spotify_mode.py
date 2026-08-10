@@ -181,7 +181,8 @@ def process_single_track(row, index, cfg):
             "--continue",
             "-f", "bestaudio/best",
             "--write-thumbnail",
-            "--extractor-args", "youtube:player_client=mweb,android",
+            "--user-agent", "Mozilla/5.0 (Android 14; VR; Oculus Quest 2) AppleWebKit/537.36",
+            "--extractor-args", "youtube:player_client=android_vr,web_creator",
             "-o", output_template,
             best["url"],
         ]
@@ -198,7 +199,7 @@ def process_single_track(row, index, cfg):
             "--continue",
             "-f", "bestaudio/best",
             "--write-thumbnail",
-            "--extractor-args", "youtube:player_client=ios,mweb",
+            "--extractor-args", "youtube:player_client=tv,mweb",
             "-o", output_template,
             best["url"],
         ]

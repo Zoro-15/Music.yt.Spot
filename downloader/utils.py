@@ -86,8 +86,11 @@ def get_ytdlp_auth_args():
                 except Exception:
                     return ["--cookies", str(dl_cookies)]
 
-    # 3. Mobile Web & Android Player Client Bypass (Bypasses YouTube Bot Block)
-    return ["--extractor-args", "youtube:player_client=mweb,android,ios"]
+    # 3. Android VR & Web Creator Player Client (Zero Bot-Check Client)
+    return [
+        "--user-agent", "Mozilla/5.0 (Android 14; VR; Oculus Quest 2) AppleWebKit/537.36",
+        "--extractor-args", "youtube:player_client=android_vr,web_creator,mweb"
+    ]
 
 
 # ============================================================
