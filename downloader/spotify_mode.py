@@ -285,9 +285,13 @@ def process_single_track(row, index, cfg):
 
         # 3. Fetch LRCLIB synced lyrics if enabled
         if cfg.get("fetch_lyrics", True):
-            fetch_lyrics(title, artists, album, audio)
+            success, res = fetch_lyrics(title, artists, album, audio)
+            if success and hasattr(res, "name"):
+                print(f"[{index:03d}] 🎤 Lyrics saved: {res.name}")
+                if cfg.get("auto_sync_android_music", True):
+                    sync_to_android_music(res)
 
-        # 4. Sync to Android System Music folder if enabled
+        # 4. Sync audio to Android System Music folder if enabled
         if cfg.get("auto_sync_android_music", True):
             sync_to_android_music(audio)
 
