@@ -44,6 +44,9 @@ def run_command(cmd, cwd=None):
         )
         return result.returncode, result.stdout, result.stderr
     except Exception as e:
+        return 1, "", str(e)
+
+
 def get_ytdlp_auth_args():
     """
     Returns authentication / player client arguments for yt-dlp.
