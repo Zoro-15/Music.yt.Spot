@@ -42,13 +42,24 @@ def prepare_csv(json_path=None):
 
     try:
         with open(source_json, "r", encoding="utf-8", errors="replace") as f:
-            tracks = json.load(f)
+            raw_data = json.load(f)
     except Exception as e:
         print(f"ERROR: Could not read JSON file: {e}")
         return False
 
-    if not isinstance(tracks, list):
-        print("ERROR: Unsupported JSON format. Expected a list of Spotify track objects.")
+    if isinstance(raw_data, list):
+        tracks = raw_data
+    elif isinstance(raw_data, dict):
+        tracks = []
+        for key in ["items", "tracks", "playlist", "songs", "data"]:
+            if key in raw_data and isinstance(raw_data[key], list):
+                tracks = raw_data[key]
+                break
+    else:
+        tracks = []
+
+    if not tracks:
+        print("ERROR: Unsupported JSON format. Could not find track items in JSON.")
         return False
 
     valid_count = 0
@@ -57,13 +68,37 @@ def prepare_csv(json_path=None):
         writer.writerow(["index", "title", "artist", "album"])
 
         for index, track in enumerate(tracks, 1):
-            title = track.get("name", "").strip()
-            artists = ", ".join(
-                artist.get("name", "").strip()
-                for artist in track.get("artists", [])
-                if artist.get("name")
-            )
-            album = track.get("album", "").strip()
+            if not isinstance(track, dict):
+                continue
+
+            # Check track object wrapper if nested under "track"
+            t_obj = track.get("track") if isinstance(track.get("track"), dict) else track
+
+            # Extract Title
+            title = (
+                t_obj.get("name") or t_obj.get("title") or t_obj.get("track_name") or t_obj.get("Track Name") or ""
+            ).strip()
+
+            # Extract Artist
+            artists_data = t_obj.get("artists") or t_obj.get("artist") or t_obj.get("Artist Name(s)")
+            if isinstance(artists_data, list):
+                artists = ", ".join(
+                    (a.get("name") if isinstance(a, dict) else str(a)).strip()
+                    for a in artists_data if a
+                )
+            elif isinstance(artists_data, str):
+                artists = artists_data.strip()
+            else:
+                artists = ""
+
+            # Extract Album
+            album_data = t_obj.get("album") or t_obj.get("Album Name")
+            if isinstance(album_data, dict):
+                album = album_data.get("name", "").strip()
+            elif isinstance(album_data, str):
+                album = album_data.strip()
+            else:
+                album = ""
 
             if not title:
                 continue

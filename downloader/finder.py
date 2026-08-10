@@ -6,17 +6,24 @@ from downloader.utils import INPUT_DIR, BASE_DIR, find_downloads_dirs
 
 def is_valid_exportify_json(file_path):
     """
-    Checks if a JSON file matches Exportify structure (list of track objects with 'name' or 'artists').
+    Checks if a JSON file matches any Spotify playlist structure (Exportify, Spotify API, Soundiiz, etc.).
     """
     try:
-        if not file_path.is_file():
+        if not file_path.is_file() or file_path.suffix.lower() != ".json":
             return False
+        if file_path.name in ["config.json", "package.json", "tsconfig.json", "progress.json"]:
+            return False
+
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             data = json.load(f)
+
         if isinstance(data, list) and len(data) > 0:
-            first = data[0]
-            if isinstance(first, dict) and ("name" in first or "artists" in first or "album" in first):
-                return True
+            return True
+
+        if isinstance(data, dict):
+            for key in ["items", "tracks", "playlist", "songs", "data"]:
+                if key in data and isinstance(data[key], list) and len(data[key]) > 0:
+                    return True
     except Exception:
         pass
     return False
