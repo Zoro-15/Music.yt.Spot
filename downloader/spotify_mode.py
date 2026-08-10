@@ -157,8 +157,9 @@ def process_single_track(row, index, cfg):
     best = candidates[0]
 
     if best["score"] < min_score:
-        print(f"[{index:03d}] ⚠ Low confidence match ({best['score']} < {min_score}) -> Review")
-        return "review", best
+        print(f"[{index:03d}] ℹ Score ({best['score']}% < {min_score}%) -> Logging & downloading highest candidate")
+        with progress_lock:
+            log_review(index, title, artists, best["title"], best["channel"], best["score"], best["url"])
 
     safe_title = sanitize_filename(title)
     if cfg.get("include_index_in_filename", False):
@@ -315,7 +316,7 @@ def run_download():
             return
 
     cfg = load_config()
-    max_workers = cfg.get("max_workers", 5)
+    max_workers = cfg.get("max_workers", 10)
 
     tracks = []
     with open(TRACKS_CSV, "r", encoding="utf-8", newline="") as f:
