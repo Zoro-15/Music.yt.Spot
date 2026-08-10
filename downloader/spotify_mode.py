@@ -107,7 +107,7 @@ def process_single_track(row, index, cfg):
         return "review", best
 
     safe_title = sanitize_filename(title)
-    if cfg.get("include_index_in_filename", True):
+    if cfg.get("include_index_in_filename", False):
         filename = f"{index:03d} - {safe_title}"
     else:
         filename = safe_title

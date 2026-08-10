@@ -9,7 +9,7 @@ from downloader.search_mode import search_and_download_song
 from downloader.youtube_mode import download_from_link
 from downloader.progress import show_status
 from downloader.review_mode import run_review_mode
-from downloader.utils import print_banner
+from downloader.utils import print_banner, clean_project_cache
 
 
 def interactive_menu():
@@ -21,10 +21,11 @@ def interactive_menu():
         print("  3. Download from Link (YT / YT Music Playlist, Album, or Video)")
         print("  4. View Spotify Download Status")
         print("  5. Review Low-Confidence / Failed Tracks")
-        print("  6. Exit")
+        print("  6. Clean / Reset Cache, CSV & Logs")
+        print("  7. Exit")
         print("-" * 50)
 
-        choice = input("Select an option [1-6]: ").strip()
+        choice = input("Select an option [1-7]: ").strip()
 
         if choice == "1":
             print("\nPreparing Spotify playlist JSON...")
@@ -47,11 +48,16 @@ def interactive_menu():
         elif choice == "5":
             run_review_mode()
             input("\nPress Enter to return to menu...")
-        elif choice == "6" or choice.lower() == "exit":
+        elif choice == "6":
+            confirm = input("Reset CSV, progress logs, and cache? [y/N]: ").strip().lower()
+            if confirm == "y":
+                clean_project_cache(include_output=False)
+            input("\nPress Enter to return to menu...")
+        elif choice == "7" or choice.lower() == "exit":
             print("\nGoodbye!")
             break
         else:
-            print("\nInvalid choice. Please enter a number between 1 and 6.")
+            print("\nInvalid choice. Please enter a number between 1 and 7.")
 
 
 def print_usage():
@@ -72,6 +78,9 @@ Universal Link Downloader (YouTube / YT Music Playlist, Album, or Video):
 
 Interactive Review Mode:
   python main.py review
+
+Clean Cache & Reset Data:
+  python main.py clean
 
 Status Report:
   python main.py status
@@ -107,6 +116,8 @@ def main():
         download_from_link(url)
     elif cmd == "review":
         run_review_mode()
+    elif cmd == "clean":
+        clean_project_cache(include_output="--all" in sys.argv or "-a" in sys.argv)
     elif cmd == "status":
         show_status()
     else:

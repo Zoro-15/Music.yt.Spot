@@ -87,6 +87,22 @@ python -m pip install -r requirements.txt
 
 ---
 
+## 🧹 Reset & Clean Cache (Optional)
+
+Before starting a fresh playlist download, you can clear previous CSV files, progress logs, cache, and temporary data by running:
+
+```bash
+python main.py clean
+```
+*(Or use shortcut wrapper: `python clean.py`)*
+
+To also clear the downloaded files in `output/`:
+```bash
+python main.py clean --all
+```
+
+---
+
 ## 🎮 Usage Guide
 
 ### Interactive Menu

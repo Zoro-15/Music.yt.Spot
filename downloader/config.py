@@ -11,7 +11,7 @@ DEFAULT_CONFIG = {
     "fetch_lyrics": True,
     "square_crop_artwork": True,
     "auto_sync_android_music": True,
-    "include_index_in_filename": True,
+    "include_index_in_filename": False,
 }
 
 

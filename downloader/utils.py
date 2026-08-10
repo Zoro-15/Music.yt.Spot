@@ -133,12 +133,65 @@ def sync_to_android_music(file_path):
         return False, f"Could not sync to Music folder: {e}"
 
 
-def trigger_android_media_scanner(file_path):
-    """Triggers Android system media scanner broadcast so music player apps detect new songs."""
-    cmd = [
-        "am", "broadcast",
-        "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
-        "-d", f"file://{file_path.resolve()}"
+def clean_project_cache(include_output=False):
+    """
+    Clears generated playlist CSV, progress state, logs, temporary files, and __pycache__.
+    If include_output is True, also clears the output directory.
+    """
+    print_banner("Cleaning Project Data & Cache")
+    files_to_remove = [
+        TRACKS_CSV,
+        PROGRESS_FILE,
+        FAILED_FILE,
+        REVIEW_FILE,
+        DATA_DIR / "downloaded_archive.txt",
     ]
-    run_command(cmd)
+
+    removed_count = 0
+    for f in files_to_remove:
+        if f.exists():
+            try:
+                f.unlink()
+                print(f" ✓ Removed: {f.relative_to(BASE_DIR)}")
+                removed_count += 1
+            except Exception as e:
+                print(f" ⚠ Could not remove {f.name}: {e}")
+
+    # Remove temporary files in data/ and project root
+    for pat in ["*.tmp", "*.temp", "*.part", "*.ytdl"]:
+        for f in list(DATA_DIR.glob(pat)) + list(BASE_DIR.glob(pat)):
+            if f.exists():
+                try:
+                    f.unlink()
+                    removed_count += 1
+                except Exception:
+                    pass
+
+    # Remove __pycache__ directories
+    for pycache in BASE_DIR.rglob("__pycache__"):
+        if pycache.exists() and pycache.is_dir():
+            try:
+                import shutil
+                shutil.rmtree(pycache)
+                print(f" ✓ Cleared cache: {pycache.relative_to(BASE_DIR)}")
+            except Exception:
+                pass
+
+    if include_output and OUTPUT_DIR.exists():
+        for item in OUTPUT_DIR.glob("*"):
+            if item.name != ".gitkeep":
+                try:
+                    if item.is_file():
+                        item.unlink()
+                    elif item.is_dir():
+                        import shutil
+                        shutil.rmtree(item)
+                    removed_count += 1
+                except Exception:
+                    pass
+        print(" ✓ Cleared output folder files")
+
+    print(f"\nCleanup complete. Removed {removed_count} files/caches.")
+    return True
+
 
