@@ -110,7 +110,8 @@ def search_youtube(title, artists, count=SEARCH_COUNT, min_score=MIN_SCORE, use_
             "yt-dlp",
             "--flat-playlist",
             "--dump-single-json",
-        ] + get_ytdlp_auth_args() + [f"ytsearch{count}:{query}"]
+            f"ytsearch{count}:{query}",
+        ]
 
         code, stdout, stderr = run_command(cmd)
         if code != 0:
