@@ -205,6 +205,22 @@ def process_single_track(row, index, cfg):
         code, stdout, stderr = run_command(fallback_cmd3)
 
     if code != 0:
+        fallback_cmd4 = [
+            "yt-dlp",
+            "--no-playlist",
+            "--retries", "5",
+            "--fragment-retries", "5",
+            "--retry-sleep", "2",
+            "--socket-timeout", "30",
+            "--continue",
+            "-f", "ba/b",
+            "--extractor-args", "youtube:player_skip=configs,webpage",
+            "-o", output_template,
+            best["url"],
+        ]
+        code, stdout, stderr = run_command(fallback_cmd4)
+
+    if code != 0:
         last_err = stderr.strip().splitlines()[-1] if stderr and stderr.strip() else "Unknown error"
         print(f"[{index:03d}] ✖ Download failed: {last_err}")
         return "failed", stderr

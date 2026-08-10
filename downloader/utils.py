@@ -86,11 +86,8 @@ def get_ytdlp_auth_args():
                 except Exception:
                     return ["--cookies", str(dl_cookies)]
 
-    # 3. TV / Web Embedded Player Client Bypass (Bypasses YouTube IP Bot Block)
-    return [
-        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
-        "--extractor-args", "youtube:player_client=tv_embedded,web_embedded,android"
-    ]
+    # 3. Mobile Web & Android Player Client Bypass (Bypasses YouTube Bot Block)
+    return ["--extractor-args", "youtube:player_client=mweb,android,ios"]
 
 
 # ============================================================
