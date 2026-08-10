@@ -149,15 +149,24 @@ python main.py link "https://music.youtube.com/playlist?list=YOUR_PLAYLIST_ID"
 2. Log in and export your Spotify playlist as **JSON**.
 3. The downloaded JSON file (e.g., `Gedi.json` or `playlist.json`) lands on your phone/computer.
 
-#### Troubleshooting Common Issues
-| Issue | Cause & Solution |
-| :--- | :--- |
-| `Sign in to confirm you're not a bot` | **Fixed automatically** using iOS/Android player client args. If YouTube challenges your IP address, export a `cookies.txt` file (using the *Get cookies.txt LOCALLY* browser extension) and place it in the project folder! |
-| `yt-dlp: command not found` | Run `python -m pip install -U yt-dlp` |
-| `ffmpeg: command not found` | Run `pkg install ffmpeg -y` in Termux |
-| `HTTP Error 403: Forbidden` | Built-in retries (`--retries 5 --retry-sleep 2`) handle temporary YouTube rate limits automatically |
-| `No JSON found in input/` | Place your Exportify JSON in `input/` or ensure Termux storage permission is granted (`termux-setup-storage`) |
-| Interrupted download | Simply rerun `python main.py` or `python download.py`. Completed tracks are skipped automatically |
+#### How to Export & Use `cookies.txt` (If Requested by YouTube)
+
+If YouTube challenges your IP address with bot detection, exporting cookies takes less than 1 minute:
+
+1. **Install Browser Extension**:
+   - Chrome / Brave / Edge: Install **[Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)** extension.
+   - Firefox / Kiwi Browser (Android): Install **cookies.txt** extension.
+2. **Export Cookies**:
+   - Go to [YouTube.com](https://www.youtube.com) (make sure you are logged in).
+   - Click the extension icon and click **Export** (saves a file named `cookies.txt`).
+3. **Copy to Termux**:
+   - In Termux, copy `cookies.txt` into your `Music.yt.Spot` repository directory:
+     ```bash
+     cp ~/storage/downloads/cookies.txt ~/Music.yt.Spot/
+     ```
+   - *The downloader will automatically detect `cookies.txt` and use it for all downloads!*
+
+---
 
 #### Step 2: Provide the JSON to the Script (3 Easy Methods)
 
