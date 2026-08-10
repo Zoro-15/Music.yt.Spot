@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music.yt.Spot — Android Web GUI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    
+    <!-- Navbar Header -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon">🎵</div>
+        <div>
+          <div class="brand-title">Music.yt.Spot</div>
+        </div>
+      </div>
+      <div class="status-pill" id="status-pill">
+        <div class="status-dot"></div>
+        <span id="status-text">Idle</span>
+      </div>
+    </header>
+
+    <!-- Tabs Navigation -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('spotify')">💚 Spotify Playlist</button>
+      <button class="tab-btn" onclick="switchTab('search')">🔎 Search Song</button>
+      <button class="tab-btn" onclick="switchTab('link')">🔗 Link Downloader</button>
+      <button class="tab-btn" onclick="switchTab('review')">🛠️ Review Center</button>
+      <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
+    </div>
+
+    <!-- Tab 1: Spotify Playlist -->
+    <div id="tab-spotify" class="tab-content">
+      
+      <!-- Discovered JSONs Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Select Spotify Playlist JSON</div>
+          <div class="card-subtitle">Auto-discovered Exportify files on your device</div>
+        </div>
+        <div id="json-list" style="margin-bottom: 16px;">
+          <div style="color: var(--text-sub);">Scanning device for Exportify JSON files...</div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-primary" onclick="prepareSelectedJSON()">📋 Prepare CSV</button>
+          <button class="btn btn-secondary" onclick="startSpotifyDownload()">🚀 Start Download</button>
+        </div>
+      </div>
+
+      <!-- Stats Overview -->
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-num" id="stat-total">0</div>
+          <div class="stat-label">Total Tracks</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="stat-success" style="color: var(--status-success);">0</div>
+          <div class="stat-label">Success</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="stat-review" style="color: var(--status-warning);">0</div>
+          <div class="stat-label">Review</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="stat-failed" style="color: var(--status-danger);">0</div>
+          <div class="stat-label">Failed</div>
+        </div>
+      </div>
+
+      <!-- Progress Bar Card -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 14px; font-weight: 600;" id="progress-text">Progress: 0%</div>
+          <div style="font-size: 12px; color: var(--text-sub);" id="remaining-text">0 tracks remaining</div>
+        </div>
+        <div class="progress-container">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+      </div>
+
+      <!-- Live Track Table Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Playlist Track Queue</div>
+        </div>
+        <div class="track-list" id="track-queue">
+          <div style="text-align: center; color: var(--text-sub); padding: 20px;">No playlist prepared yet. Select a JSON file above!</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Tab 2: Single Song Search -->
+    <div id="tab-search" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Search & Download Song by Name</div>
+          <div class="card-subtitle">Type track name or artist to find and download instantly</div>
+        </div>
+        <div class="input-group">
+          <input type="text" id="search-input" class="input-field" placeholder="e.g. No Handouts Amantej Hundal" onkeypress="if(event.key==='Enter') searchSong()">
+          <button class="btn btn-primary" onclick="searchSong()">🔎 Search & Download</button>
+        </div>
+        <div id="search-result-status" style="font-size: 14px; color: var(--spotify-green);"></div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Universal Link Downloader -->
+    <div id="tab-link" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Universal Link Downloader</div>
+          <div class="card-subtitle">Paste any YouTube / YouTube Music URL (Playlist, Album, or Track)</div>
+        </div>
+        <div class="input-group">
+          <input type="text" id="link-input" class="input-field" placeholder="https://music.youtube.com/playlist?list=..." onkeypress="if(event.key==='Enter') downloadLink()">
+          <button class="btn btn-primary" onclick="downloadLink()">📥 Download</button>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
+          <span class="badge badge-pending">YT Music Album</span>
+          <span class="badge badge-pending">YT Playlist</span>
+          <span class="badge badge-pending">Music Video</span>
+          <span class="badge badge-pending">M4A / Opus</span>
+        </div>
+        <div id="link-result-status" style="font-size: 14px; color: var(--spotify-green); margin-top: 12px;"></div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Review Center -->
+    <div id="tab-review" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Flagged Track Review Center</div>
+          <div class="card-subtitle">Tracks requiring confidence review (score &lt; 70)</div>
+        </div>
+        <div class="track-list" id="review-queue">
+          <div style="text-align: center; color: var(--text-sub); padding: 20px;">No tracks flagged for review.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 5: Settings -->
+    <div id="tab-settings" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Configuration & Options</div>
+        </div>
+        
+        <div class="setting-item">
+          <div>
+            <div style="font-weight: 600;">Parallel Worker Threads</div>
+            <div style="font-size: 12px; color: var(--text-sub);">Concurrent downloads (1 - 16)</div>
+          </div>
+          <input type="number" id="cfg-workers" min="1" max="16" value="8" style="width: 70px; padding: 8px; border-radius: 8px; border: 1px solid var(--card-border); background: #000; color: #fff; text-align: center;">
+        </div>
+
+        <div class="setting-item">
+          <div>
+            <div style="font-weight: 600;">YouTube Music Topic Priority</div>
+            <div style="font-size: 12px; color: var(--text-sub);">Prioritize official audio releases</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="cfg-ytmusic" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div>
+            <div style="font-weight: 600;">Synchronized Lyrics (.lrc)</div>
+            <div style="font-size: 12px; color: var(--text-sub);">Fetch lyrics from LRCLIB</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="cfg-lyrics" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div>
+            <div style="font-weight: 600;">1:1 Square Cover Art Crop</div>
+            <div style="font-size: 12px; color: var(--text-sub);">Crop thumbnails to 1:1 square via FFmpeg</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="cfg-crop" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div>
+            <div style="font-weight: 600;">Android Music Folder Sync</div>
+            <div style="font-size: 12px; color: var(--text-sub);">Copy files to /sdcard/Music</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="cfg-android-sync" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div>
+            <div style="font-weight: 600;">Include Index Number in Filename</div>
+            <div style="font-size: 12px; color: var(--text-sub);">Add '001 - ' prefix to filenames</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="cfg-index">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Reset & Cleanup</div>
+          <div class="card-subtitle">Clear CSVs, progress state, and temporary cache</div>
+        </div>
+        <button class="btn btn-danger" onclick="cleanCache()">🧹 Reset Cache & Data</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

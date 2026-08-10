@@ -8,6 +8,7 @@ A high-performance, multi-threaded **Android / Termux** tool for downloading aud
 
 - 🔎 **Search & Download Song by Name**: Download any track by typing its name (`python main.py search "Song Name"`). The script automatically finds the best YouTube Music match, downloads native audio, crops 1:1 cover art, embeds metadata, fetches synced lyrics, and syncs to Android Music.
 - 🔗 **Universal Link Downloader**: Directly handles YouTube Playlists, YouTube Music Playlists, YouTube Music Albums (`music.youtube.com/playlist?list=...`), Music Videos, and single videos.
+- 📱 **Modern Android Web GUI**: Launch a sleek Spotify-styled glassmorphism Web App on your phone (`python gui.py`) with 1-click JSON discovery, real-time progress bars, live track tables, song search, link downloader, and setting toggles.
 - ⚡ **8x Parallel Downloads by Default**: Multi-threaded processing (`8` concurrent workers) slashes download times by up to 80%.
 - 🎵 **YouTube Music (YTM) Topic Priority**: Multi-pass search targets official YouTube Music topic tracks (`ytmusic:`) first, eliminating intro/outro video skits.
 - 🎤 **Synchronized Lyrics (.lrc)**: Integrates with LRCLIB to fetch synchronized lyrics alongside audio files.
@@ -84,6 +85,16 @@ git clone https://github.com/Zoro-15/Music.yt.Spot.git
 cd Music.yt.Spot
 python -m pip install -r requirements.txt
 ```
+
+---
+
+## 📱 Launch Android Web GUI (Recommended)
+
+Simply run:
+```bash
+python gui.py
+```
+This automatically starts the local server and opens the modern **Spotify Glassmorphism Web App** in your phone's browser (`http://127.0.0.1:8000`).
 
 ---
 
