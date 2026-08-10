@@ -6,7 +6,8 @@ __pycache__/
 .pytest_cache/
 
 # User input JSON (Spotify Exportify exports)
-input/*.json
+*.json
+!config.json
 !input/.gitkeep
 
 # Generated playlist data and progress tracking
