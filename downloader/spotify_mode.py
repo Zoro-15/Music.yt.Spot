@@ -88,6 +88,10 @@ def process_single_track(row, index, cfg):
     """
     title = row["title"]
     artists = row["artist"]
+    album = row.get("album", "")
+    min_score = cfg.get("min_score", 70)
+    use_ytmusic = cfg.get("ytmusic_priority", True)
+
     safe_title = sanitize_filename(title)
     filename_with_idx = f"{index:03d} - {safe_title}"
 
