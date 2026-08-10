@@ -1,0 +1,32 @@
+# Python bytecode and temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# User input JSON (Spotify Exportify exports)
+input/*.json
+!input/.gitkeep
+
+# Generated playlist data and progress tracking
+data/*.csv
+data/*.json
+data/*.txt
+!data/.gitkeep
+
+# Downloaded audio, artwork, and temporary download files
+output/*
+!output/.gitkeep
+*.part
+*.ytdl
+*.tmp
+*.temp
+
+# System / OS metadata
+.DS_Store
+Thumbs.db
+.env
+.venv/
+env/
+venv/
