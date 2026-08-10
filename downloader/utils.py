@@ -51,36 +51,32 @@ def get_ytdlp_auth_args():
     """
     Returns authentication / player client arguments for yt-dlp.
     Auto-discovers cookies.txt in project root, input/, data/, or Android Downloads folders.
-    If cookies.txt is found in Downloads, automatically copies it to data/cookies.txt.
-    Otherwise passes --extractor-args youtube:player_client=ios,android,mweb,web_creator to bypass YouTube bot checks.
+    Otherwise uses Android YouTube app User-Agent + player_client=android,ios to bypass YouTube bot checks.
     """
-    # 1. Search project directories
+    # 1. Search project directories for cookies.txt
     for c_path in [BASE_DIR / "cookies.txt", INPUT_DIR / "cookies.txt", DATA_DIR / "cookies.txt"]:
         if c_path.exists() and c_path.is_file():
             return ["--cookies", str(c_path)]
 
-    # 2. Search Android Downloads folders automatically
-    home = Path.home()
-    download_dirs = [
-        home / "storage" / "downloads",
-        home / "storage" / "shared" / "Download",
-        Path("/sdcard/Download"),
-        Path("/storage/emulated/0/Download"),
-    ]
-    for d_dir in download_dirs:
-        dl_cookies = d_dir / "cookies.txt"
-        if dl_cookies.exists() and dl_cookies.is_file():
-            dest = DATA_DIR / "cookies.txt"
-            try:
-                import shutil
-                shutil.copy2(dl_cookies, dest)
-                print(f" ✓ Auto-discovered cookies.txt in Downloads: {dest.name}")
-                return ["--cookies", str(dest)]
-            except Exception:
-                return ["--cookies", str(dl_cookies)]
+    # 2. Search Android Downloads folders for cookies.txt
+    for d_dir in find_downloads_dirs():
+        for name in ["cookies.txt", "youtube.com_cookies.txt", "youtube_cookies.txt"]:
+            dl_cookies = d_dir / name
+            if dl_cookies.exists() and dl_cookies.is_file():
+                dest = DATA_DIR / "cookies.txt"
+                try:
+                    import shutil
+                    shutil.copy2(dl_cookies, dest)
+                    print(f" ✓ Auto-discovered cookies in Downloads: {dl_cookies.name}")
+                    return ["--cookies", str(dest)]
+                except Exception:
+                    return ["--cookies", str(dl_cookies)]
 
-    # 3. Fallback: Bypass YouTube WEB bot checks using multi-client rotation
-    return ["--extractor-args", "youtube:player_client=ios,android,mweb,web_creator"]
+    # 3. Official Android YouTube App User-Agent & client bypass (bypasses WEB bot check)
+    return [
+        "--user-agent", "com.google.android.youtube/19.29.37 (Linux; U; Android 14; en_US)",
+        "--extractor-args", "youtube:player_client=android,ios"
+    ]
 
 
 # ============================================================

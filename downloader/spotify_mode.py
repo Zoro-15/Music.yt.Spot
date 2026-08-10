@@ -18,6 +18,7 @@ from downloader.utils import (
     sanitize_filename,
     print_banner,
     sync_to_android_music,
+    find_android_music_dir,
     get_ytdlp_auth_args,
 )
 
@@ -87,9 +88,22 @@ def process_single_track(row, index, cfg):
     """
     title = row["title"]
     artists = row["artist"]
-    album = row["album"]
-    min_score = cfg.get("min_score", 70)
-    use_ytmusic = cfg.get("ytmusic_priority", True)
+    safe_title = sanitize_filename(title)
+    filename_with_idx = f"{index:03d} - {safe_title}"
+
+    # Check if audio file already exists on disk (in output/ or Android Music folder)
+    audio_extensions = [".m4a", ".webm", ".opus", ".mp3", ".aac"]
+    music_dir = find_android_music_dir()
+
+    for ext in audio_extensions:
+        if (
+            (OUTPUT_DIR / f"{filename_with_idx}{ext}").exists()
+            or (OUTPUT_DIR / f"{safe_title}{ext}").exists()
+            or (music_dir and (music_dir / f"{filename_with_idx}{ext}").exists())
+            or (music_dir and (music_dir / f"{safe_title}{ext}").exists())
+        ):
+            print(f"[{index:03d}] ✓ '{title}' already exists on disk. Skipping.")
+            return "success", {"title": title, "channel": "Local Disk", "score": 100}
 
     print(f"[{index:03d}] Processing: '{title}' by {artists}")
 
