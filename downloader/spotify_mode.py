@@ -89,6 +89,14 @@ def prepare_csv(source_input: Optional[Union[str, Path]] = None) -> bool:
         for idx, item in enumerate(tracks_data, 1):
             writer.writerow([idx, item["title"], item["artist"], item.get("album", ""), item.get("duration_sec", 0), item.get("cover_url", "")])
 
+    # Clear stale progress tracking when preparing a new playlist CSV
+    from downloader.utils import PROGRESS_FILE
+    if PROGRESS_FILE.exists():
+        try:
+            PROGRESS_FILE.unlink()
+        except Exception:
+            pass
+
     print(f"\n✓ Playlist prepared! {len(tracks_data)} tracks written to {TRACKS_CSV}\n")
     return True
 
@@ -103,10 +111,11 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
     filename_with_idx = f"{index:03d} - {safe_title}"
     music_dir = find_android_music_dir()
 
+    # Strictly check if this specific track file (indexed or exact title in output dir) exists
     for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
-        if ((OUTPUT_DIR / f"{filename_with_idx}{ext}").exists() or (OUTPUT_DIR / f"{safe_title}{ext}").exists() or
-            (music_dir and ((music_dir / f"{filename_with_idx}{ext}").exists() or (music_dir / f"{safe_title}{ext}").exists()))):
+        if (OUTPUT_DIR / f"{filename_with_idx}{ext}").exists() or (OUTPUT_DIR / f"{safe_title}{ext}").exists():
             return "success", {"title": title, "channel": "Local Disk", "score": 100}
+
 
 
     candidates, error = search_youtube(title, artists, min_score=min_score, use_ytmusic=use_ytmusic, target_duration_sec=target_duration_sec)

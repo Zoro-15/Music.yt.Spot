@@ -81,15 +81,20 @@ def apply_native_metadata(
                 if lyrics_text:
                     audio["LYRICS"] = [lyrics_text]
 
-                if image_bytes and hasattr(audio, "add_picture"):
+                if image_bytes:
                     pic = Picture()
                     pic.data = image_bytes
                     pic.type = 3
                     pic.mime = "image/png" if image_bytes.startswith(b"\x89PNG") else "image/jpeg"
-                    audio.add_picture(pic)
+                    if hasattr(audio, "add_picture"):
+                        audio.add_picture(pic)
+                    else:
+                        import base64
+                        audio["METADATA_BLOCK_PICTURE"] = [base64.b64encode(pic.write()).decode("ascii")]
 
                 audio.save()
-                return True, f"Applied {ext} Vorbis metadata"
+                return True, f"Applied {ext} Vorbis metadata & artwork"
+
 
         # Fallback for unrecognized extension
         return apply_spotify_metadata(audio_file, title, artist, album)
