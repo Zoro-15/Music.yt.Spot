@@ -137,12 +137,13 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
     output_template = str(OUTPUT_DIR / f"{filename}.%(ext)s")
     audio_args = get_audio_quality_args(cfg)
 
-    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--add-metadata", "--write-thumbnail", "--embed-thumbnail"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
+    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--add-metadata", "--write-thumbnail", "--embed-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
     code, stdout, stderr = run_command(cmd)
 
     if code != 0:
-        fallback_cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
+        fallback_cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail", "--embed-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
         code, stdout, stderr = run_command(fallback_cmd)
+
 
     if code != 0:
         return "failed", stderr.strip().splitlines()[-1] if stderr and stderr.strip() else "Unknown error"

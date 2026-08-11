@@ -37,7 +37,7 @@ def download_youtube_playlist(url: str) -> bool:
     output_template = str(OUTPUT_DIR / "%(playlist_index)03d - %(title)s.%(ext)s")
     before_files = set(OUTPUT_DIR.glob("*.*"))
 
-    cmd = ["yt-dlp", "--yes-playlist", "--download-archive", str(archive_file), "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--add-metadata", "--embed-thumbnail", "--write-thumbnail"] + get_ytdlp_auth_args() + ["-o", output_template, url]
+    cmd = ["yt-dlp", "--yes-playlist", "--download-archive", str(archive_file), "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--add-metadata", "--embed-thumbnail", "--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, url]
     code, stdout, stderr = run_command(cmd)
 
     if code == 0:
@@ -75,7 +75,8 @@ def download_youtube_video(url: str) -> bool:
     output_template = str(OUTPUT_DIR / "%(title)s.%(ext)s")
     before_files = set(OUTPUT_DIR.glob("*.*"))
 
-    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--add-metadata", "--embed-thumbnail", "--write-thumbnail"] + get_ytdlp_auth_args() + ["-o", output_template, url]
+    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--add-metadata", "--embed-thumbnail", "--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, url]
+
     code, stdout, stderr = run_command(cmd)
 
     if code == 0:

@@ -103,12 +103,8 @@ def get_ytdlp_auth_args() -> List[str]:
 
 def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
     """
-    Returns native audio format selection arguments for yt-dlp.
-    Priority order:
-    1. M4A (.m4a) — AAC stream with 100% native Android album art support
-    2. Opus (.webm / .opus) — Opus stream
-    3. Best Audio stream (bestaudio/best)
-    Zero lossy re-encoding.
+    Returns native audio extraction and thumbnail embedding flags for yt-dlp.
+    Matches official YTDLnis postprocessor options.
     """
     if cfg is None:
         try:
@@ -119,10 +115,11 @@ def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
 
     fmt = str(cfg.get("audio_format", "best_native")).lower()
 
-    if fmt in ["opus", "webm"]:
-        return ["-f", "ba[ext=webm]/ba[ext=m4a]/bestaudio/best"]
-    else:  # "best_native" or "m4a" default: Priority 1: M4A (.m4a), Priority 2: Opus (.webm)
-        return ["-f", "ba[ext=m4a]/ba[ext=webm]/bestaudio/best"]
+    if fmt in ["m4a", "aac"]:
+        return ["-x", "--audio-format", "m4a", "--audio-quality", "0"]
+    else:
+        return ["-x", "--audio-format", "opus", "--audio-quality", "0"]
+
 
 
 

@@ -35,8 +35,9 @@ def search_and_download_song(query: str) -> bool:
     safe_title = sanitize_filename(best["title"])
     output_template = str(OUTPUT_DIR / f"{safe_title}.%(ext)s")
 
-    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--add-metadata", "--embed-thumbnail", "--write-thumbnail"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
+    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--add-metadata", "--embed-thumbnail", "--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
     code, stdout, stderr = run_command(cmd)
+
 
     if code != 0:
         print(f"✖ Download failed: {stderr[-1000:] if stderr else 'Unknown error'}")
