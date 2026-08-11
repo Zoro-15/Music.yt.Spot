@@ -62,6 +62,7 @@ python main.py link "https://music.youtube.com/playlist?list=..."
 ```
 
 ### 4. Utility Commands
+- **Audit & Clean Wrong Songs in Folder**: `python main.py audit`
 - **Review Low-Confidence Tracks**: `python main.py review`
 - **Clean Cache & CSV Logs**: `python main.py clean`
 - **Clean Output Directory**: `python main.py clean --all`

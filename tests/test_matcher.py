@@ -24,22 +24,22 @@ def test_bad_candidate():
 def test_score_candidate():
     # Official topic channel match with good title & duration
     score = score_candidate(
-        spotify_title="Blinding Lights",
-        spotify_artists="The Weeknd",
-        yt_title="Blinding Lights",
-        channel="The Weeknd - Topic",
-        candidate_duration=200,
-        target_duration=202,
+        spotify_title="Unbothered",
+        spotify_artists="Navaan Sandhu",
+        yt_title="Unbothered",
+        channel="Navaan Sandhu - Topic",
+        candidate_duration=293,
+        target_duration=293,
     )
     assert score >= 85
 
-    # Bad candidate penalty (slowed)
-    slowed_score = score_candidate(
-        spotify_title="Blinding Lights",
-        spotify_artists="The Weeknd",
-        yt_title="Blinding Lights (Slowed + Reverb)",
-        channel="Random uploader",
-        candidate_duration=250,
-        target_duration=202,
+    # Wrong artist penalty (Jineewells instead of Navaan Sandhu)
+    wrong_artist_score = score_candidate(
+        spotify_title="Unbothered",
+        spotify_artists="Navaan Sandhu",
+        yt_title="Unbothered",
+        channel="Jineewells - Topic",
+        candidate_duration=152,
+        target_duration=293,
     )
-    assert slowed_score < score
+    assert wrong_artist_score < 40  # Must fail 70 threshold!

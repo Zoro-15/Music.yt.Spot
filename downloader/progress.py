@@ -78,3 +78,106 @@ def show_status() -> None:
     print()
 
 
+def audit_and_fix_mismatched_tracks(force_delete: bool = True, reset_failed: bool = True) -> int:
+    """
+    Audits existing downloaded tracks in output/ directory against target durations in tracks.csv.
+    Removes wrong/mismatched audio files and resets failed tracks so they can all be re-downloaded correctly.
+    """
+    from downloader.utils import OUTPUT_DIR, print_banner, sanitize_filename
+    from pathlib import Path
+
+    if not TRACKS_CSV.exists():
+        print("No tracks.csv found to audit. Please prepare a playlist CSV first.")
+        return 0
+
+    print_banner("Auditing Folder for Wrong Songs & Resetting Failed Tracks")
+
+    target_map: Dict[str, Dict[str, Any]] = {}
+    with open(TRACKS_CSV, "r", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            target_map[str(row["index"])] = row
+
+    progress = load_progress()
+    mismatched_count = 0
+    failed_reset_count = 0
+
+    # 1. Reset failed tracks for re-download retry
+    if reset_failed:
+        failed_keys = [k for k, v in progress.items() if v.get("status") == "failed"]
+        for k in failed_keys:
+            del progress[k]
+            failed_reset_count += 1
+        if failed_reset_count > 0:
+            print(f" ✓ Reset {failed_reset_count} previously failed track(s) for download retry.")
+
+    try:
+        import mutagen
+    except ImportError:
+        mutagen = None
+
+    for idx, target in target_map.items():
+        title = target["title"]
+        target_dur = int(target.get("duration_sec") or 0)
+        safe_title = sanitize_filename(title)
+        filename_with_idx = f"{int(idx):03d} - {safe_title}"
+
+        # Find file in output/
+        found_file: Optional[Path] = None
+        for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
+            p1 = OUTPUT_DIR / f"{filename_with_idx}{ext}"
+            p2 = OUTPUT_DIR / f"{safe_title}{ext}"
+            if p1.exists():
+                found_file = p1
+                break
+            elif p2.exists():
+                found_file = p2
+                break
+
+        if not found_file or not found_file.exists():
+            continue
+
+        is_mismatch = False
+        reason = ""
+
+        # Audit 1: Check actual audio duration if target_dur is available
+        if target_dur > 0 and mutagen is not None:
+            try:
+                audio_info = mutagen.File(found_file)
+                if audio_info and hasattr(audio_info, "info") and hasattr(audio_info.info, "length"):
+                    actual_dur = int(audio_info.info.length)
+                    diff = abs(actual_dur - target_dur)
+                    if diff > 30 or (diff / max(target_dur, 1)) > 0.2:
+                        is_mismatch = True
+                        reason = f"Duration mismatch (File: {actual_dur // 60}:{actual_dur % 60:02d}, Target: {target_dur // 60}:{target_dur % 60:02d})"
+            except Exception:
+                pass
+
+        # Audit 2: Check if marked as review/low score in progress
+        if not is_mismatch and idx in progress:
+            p_status = progress[idx].get("status")
+            score = progress[idx].get("score") or 100
+            if p_status == "review" or score < 60:
+                is_mismatch = True
+                reason = f"Low confidence match score ({score}/100)"
+
+        if is_mismatch:
+            mismatched_count += 1
+            print(f" ⚠️ Flagged Track #{idx} '{title}': {reason}")
+            if force_delete:
+                try:
+                    found_file.unlink()
+                    print(f"    ✓ Removed wrong file: {found_file.name}")
+                except Exception as e:
+                    print(f"    ✖ Could not remove {found_file.name}: {e}")
+
+                if idx in progress:
+                    del progress[idx]
+
+    total_reset = mismatched_count + failed_reset_count
+    if total_reset > 0:
+        save_progress(progress, force=True)
+
+    print(f"\nAudit complete. Reset {total_reset} track(s) total ({mismatched_count} wrong files removed, {failed_reset_count} failed tracks reset).")
+    return total_reset
+
+

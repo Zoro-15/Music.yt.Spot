@@ -129,9 +129,10 @@ def artist_match(artists: str, candidate_title: str, candidate_channel: str) -> 
     return min(score, 40)
 
 
-def bad_candidate(title: str) -> bool:
-    """Detects unwanted track variants (slowed, reverb, cover, remix, etc.)."""
-    t = normalize(title)
+def bad_candidate(candidate_title: str, target_title: str = "") -> bool:
+    """Detects unwanted track variants (slowed, reverb, cover, remix, mix, etc.) unless target title requests it."""
+    t = normalize(candidate_title)
+    target_norm = normalize(target_title)
     bad_words = [
         "slowed",
         "reverb",
@@ -140,14 +141,21 @@ def bad_candidate(title: str) -> bool:
         "8d",
         "nightcore",
         "remix",
+        "mix",
+        "mashup",
         "cover",
         "reaction",
         "karaoke",
         "instrumental",
         "live",
         "shorts",
+        "bootleg",
+        "rework",
     ]
-    return any(w in t for w in bad_words)
+    for w in bad_words:
+        if w in t and w not in target_norm:
+            return True
+    return False
 
 
 def score_candidate(
@@ -158,26 +166,36 @@ def score_candidate(
     candidate_duration: Optional[int] = None,
     target_duration: Optional[int] = None,
 ) -> int:
-    """Scores a YouTube candidate (0 to 100) based on title, artist, topic channel, duration, and penalties."""
+    """Scores a YouTube candidate (0 to 100) based on title, artist, topic channel, duration, and strict penalties."""
     score = 0
     score += min(50, int(similarity(spotify_title, yt_title) * 50))
-    score += artist_match(spotify_artists, yt_title, channel)
 
-    if bad_candidate(yt_title):
+    art_score = artist_match(spotify_artists, yt_title, channel)
+    score += art_score
+
+    # Strict Penalty: If artist name is provided but candidate title & channel completely miss the artist
+    if spotify_artists and spotify_artists.strip() and art_score == 0:
+        score -= 45
+
+    if bad_candidate(yt_title, spotify_title):
         score -= 35
 
-    # Phase 2 Feature: Official Topic Channel Bonus (+20 pts)
+    # Topic Channel Bonus (+20 pts)
     chan_norm = normalize(channel)
     if "topic" in chan_norm or channel.endswith("- Topic"):
         score += 20
 
+    # Duration Match Scoring & Severe Penalty for Large Discrepancies
     if candidate_duration and target_duration and candidate_duration > 0 and target_duration > 0:
         diff = abs(candidate_duration - target_duration)
+        rel_diff = diff / max(target_duration, 1)
         if diff <= 5:
             score += 15
         elif diff <= 10:
             score += 5
-        elif diff > 30:
+        elif diff > 60 or rel_diff > 0.3:
+            score -= 60
+        elif diff > 30 or rel_diff > 0.15:
             score -= 40
         elif diff > 15:
             score -= 20
@@ -196,14 +214,19 @@ def search_youtube(
     use_ytmusic: bool = True,
     target_duration_sec: Optional[int] = None,
 ) -> Tuple[List[Dict[str, Any]], str]:
-    """Queries YouTube using fast 1-pass search strategy with Python API & cache support."""
-    primary_query = f"{artists} - {title} Topic" if artists else f"{title} Official Audio"
-    fallback_query = f"{artists} {title}" if artists else title
+    """Queries YouTube using multi-pass search strategy with Python API & cache support."""
+    queries = []
+    if artists:
+        queries.append(f"{artists} {title}")
+        queries.append(f"{artists} - {title} Topic")
+    else:
+        queries.append(f"{title} Official Audio")
+        queries.append(title)
 
     all_candidates: List[Dict[str, Any]] = []
     seen_urls: Set[str] = set()
 
-    for query in [primary_query, fallback_query]:
+    for query in queries:
         entries = search_youtube_entries(query, count=count)
         for entry in entries:
             if not entry:

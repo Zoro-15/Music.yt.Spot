@@ -8,7 +8,7 @@ import argparse
 from downloader.spotify_mode import prepare_csv, run_download
 from downloader.search_mode import search_and_download_song
 from downloader.youtube_mode import download_from_link
-from downloader.progress import show_status
+from downloader.progress import show_status, audit_and_fix_mismatched_tracks
 from downloader.review_mode import run_review_mode
 from downloader.utils import print_banner, clean_project_cache
 from downloader.config import load_config, save_config
@@ -23,11 +23,12 @@ def interactive_menu():
         print("  3. Download from Universal Link (YouTube, YT Music, or Spotify)")
         print("  4. View Spotify Download Status")
         print("  5. Review Low-Confidence / Failed Tracks")
-        print("  6. Clean / Reset Cache, CSV & Logs")
-        print("  7. Exit")
+        print("  6. Audit & Fix Mismatched / Failed Tracks (Auto-clean & Re-download)")
+        print("  7. Clean / Reset Cache, CSV & Logs")
+        print("  8. Exit")
         print("-" * 50)
 
-        choice = input("Select an option [1-7]: ").strip()
+        choice = input("Select an option [1-8]: ").strip()
 
         if choice == "1":
             url_or_json = input("\nEnter Spotify URL or press Enter to auto-discover local JSON: ").strip()
@@ -53,17 +54,24 @@ def interactive_menu():
             run_review_mode()
             input("\nPress Enter to return to menu...")
         elif choice == "6":
+            removed = audit_and_fix_mismatched_tracks(force_delete=True)
+            if removed > 0:
+                re_dn = input("\nRe-download corrected tracks now? [Y/n]: ").strip().lower()
+                if re_dn != "n":
+                    run_download()
+            input("\nPress Enter to return to menu...")
+        elif choice == "7":
             confirm = input("Reset CSV, progress logs, and cache? [y/N]: ").strip().lower()
             if confirm == "y":
                 inc_out = input("Also clear all downloaded audio files in output/ folder? [y/N]: ").strip().lower() == "y"
                 clean_project_cache(include_output=inc_out)
             input("\nPress Enter to return to menu...")
 
-        elif choice == "7" or choice.lower() == "exit":
+        elif choice == "8" or choice.lower() == "exit":
             print("\nGoodbye!")
             break
         else:
-            print("\nInvalid choice. Please enter a number between 1 and 7.")
+            print("\nInvalid choice. Please enter a number between 1 and 8.")
 
 
 def main():
@@ -94,6 +102,9 @@ def main():
     # review subcommand
     subparsers.add_parser("review", help="Interactively review low-confidence track matches")
 
+    # audit subcommand
+    subparsers.add_parser("audit", help="Audit folder for duration mismatches and auto-remove wrong songs")
+
     # clean subcommand
     clean_parser = subparsers.add_parser("clean", help="Clean cache, logs, and temporary files")
     clean_parser.add_argument("-a", "--all", action="store_true", help="Also clear output directory")
@@ -119,6 +130,8 @@ def main():
         download_from_link(args.url)
     elif cmd == "review":
         run_review_mode()
+    elif cmd == "audit":
+        audit_and_fix_mismatched_tracks(force_delete=True)
     elif cmd == "clean":
         clean_project_cache(include_output=args.all)
     elif cmd == "status":
