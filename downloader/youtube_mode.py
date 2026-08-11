@@ -83,10 +83,16 @@ def download_youtube_playlist(url: str) -> bool:
             t_template = str(OUTPUT_DIR / "%(title)s.%(ext)s")
             v_cmd = ["yt-dlp", "--no-playlist", "--retries", "3", "--socket-timeout", "20"] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", t_template, t_url]
 
-            v_code, _, _ = run_command(v_cmd)
+            v_code, _, v_stderr = run_command(v_cmd)
+
+            # Retry 2: Automatic fallback with alternate player_client flags if primary download encountered issues
+            if v_code != 0:
+                fallback_v_cmd = ["yt-dlp", "--no-playlist", "--retries", "3", "--socket-timeout", "20", "--extractor-args", "youtube:player_client=ios,web"] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", t_template, t_url]
+                v_code, _, v_stderr = run_command(fallback_v_cmd)
+
             if v_code == 0:
                 downloaded = list(set(OUTPUT_DIR.glob("*.*")) - before_files)
-                ok, _, _ = process_and_finalize_audio(
+                ok, _, msg = process_and_finalize_audio(
                     downloaded_files=downloaded,
                     title=t_title,
                     artist=t_artist,
@@ -97,9 +103,13 @@ def download_youtube_playlist(url: str) -> bool:
                     print(" ✓ Done")
                     success_count += 1
                 else:
-                    print(" ⚠ Processed with warnings")
+                    print(f" ⚠ Processed ({msg})")
             else:
-                print(" ✖ Failed")
+                err_msg = "Unknown error"
+                if v_stderr and v_stderr.strip():
+                    err_lines = [l.strip() for l in v_stderr.split("\n") if "ERROR:" in l or "HTTP Error" in l or "Sign in" in l or "Unavailable" in l]
+                    err_msg = err_lines[-1] if err_lines else v_stderr.strip().split("\n")[-1]
+                print(f" ✖ Failed — Reason: {err_msg}")
 
         generate_m3u8_playlist(playlist_title, list(OUTPUT_DIR.glob("*.*")))
         print_banner(f"✓ ALBUM DOWNLOAD COMPLETE ({success_count}/{total} tracks processed)")
