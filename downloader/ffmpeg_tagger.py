@@ -93,7 +93,23 @@ def apply_native_metadata(
                         audio["METADATA_BLOCK_PICTURE"] = [base64.b64encode(pic.write()).decode("ascii")]
 
                 audio.save()
-                return True, f"Applied {ext} Vorbis metadata & artwork"
+
+            # For .opus files, also attach picture stream via FFmpeg for Android MediaStore compatibility
+            if image_bytes and ext == ".opus":
+                try:
+                    cov_tmp = audio_file.with_name(f"{audio_file.stem}_cov.jpg")
+                    cov_tmp.write_bytes(image_bytes)
+                    out_tmp = audio_file.with_name(f"{audio_file.stem}_pic_{uuid.uuid4().hex[:4]}.opus")
+                    c_code, _, _ = run_command(["ffmpeg", "-y", "-i", str(audio_file), "-i", str(cov_tmp), "-map", "0:a", "-map", "1:v", "-c", "copy", "-disposition:v", "attached_pic", str(out_tmp)])
+                    if c_code == 0 and out_tmp.exists():
+                        out_tmp.replace(audio_file)
+                    if cov_tmp.exists():
+                        cov_tmp.unlink()
+                except Exception:
+                    pass
+
+            return True, f"Applied {ext} Vorbis metadata & artwork"
+
 
 
         # Fallback for unrecognized extension

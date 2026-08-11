@@ -105,8 +105,8 @@ def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
     """
     Returns native audio format selection arguments for yt-dlp.
     Priority order:
-    1. Opus (.webm / .opus) — Highest quality native YouTube stream (~160kbps 48kHz Opus)
-    2. M4A (.m4a) — AAC stream
+    1. M4A (.m4a) — AAC stream with 100% native Android album art support
+    2. Opus (.webm / .opus) — Opus stream
     3. Best Audio stream (bestaudio/best)
     Zero lossy re-encoding.
     """
@@ -119,12 +119,11 @@ def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
 
     fmt = str(cfg.get("audio_format", "best_native")).lower()
 
-    if fmt in ["m4a", "aac"]:
+    if fmt in ["opus", "webm"]:
+        return ["-f", "ba[ext=webm]/ba[ext=m4a]/bestaudio/best"]
+    else:  # "best_native" or "m4a" default: Priority 1: M4A (.m4a), Priority 2: Opus (.webm)
         return ["-f", "ba[ext=m4a]/ba[ext=webm]/bestaudio/best"]
-    elif fmt in ["opus", "webm"]:
-        return ["-f", "ba[ext=webm]/ba[ext=m4a]/bestaudio/best"]
-    else:  # "best_native" default: Priority 1: Opus (.webm), Priority 2: M4A (.m4a)
-        return ["-f", "ba[ext=webm]/ba[ext=m4a]/bestaudio/best"]
+
 
 
 # ============================================================
