@@ -4,6 +4,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Optional, Dict, Any, Tuple, Union, List
 
 from downloader.config import load_config
 from downloader.finder import discover_playlist_json
@@ -26,7 +27,7 @@ from downloader.utils import (
 progress_lock = threading.Lock()
 
 
-def prepare_csv(json_path=None):
+def prepare_csv(json_path: Optional[Union[str, Path]] = None) -> bool:
     """
     Parses Exportify JSON file and prepares data/tracks.csv.
     """
@@ -116,7 +117,7 @@ def prepare_csv(json_path=None):
     return True
 
 
-def process_single_track(row, index, cfg):
+def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -> Tuple[str, Union[Dict[str, Any], str]]:
     """
     Processes YouTube search, score matching, yt-dlp download, FFmpeg tagging,
     artwork cropping, lyrics fetching, and Android sync for a single Spotify track.
@@ -159,7 +160,7 @@ def process_single_track(row, index, cfg):
     if best["score"] < min_score:
         print(f"[{index:03d}] ℹ Score ({best['score']}% < {min_score}%) -> Logging & downloading highest candidate")
         with progress_lock:
-            log_review(index, title, artists, best["title"], best["channel"], best["score"], best["url"])
+            log_review(index, title, artists, best["score"], best["title"], best["url"])
 
     safe_title = sanitize_filename(title)
     if cfg.get("include_index_in_filename", False):
@@ -286,7 +287,7 @@ def process_single_track(row, index, cfg):
         # 3. Fetch LRCLIB synced lyrics if enabled
         if cfg.get("fetch_lyrics", True):
             success, res = fetch_lyrics(title, artists, album, audio)
-            if success and hasattr(res, "name"):
+            if success and isinstance(res, Path):
                 print(f"[{index:03d}] 🎤 Lyrics saved: {res.name}")
                 if cfg.get("auto_sync_android_music", True):
                     sync_to_android_music(res)
@@ -299,7 +300,7 @@ def process_single_track(row, index, cfg):
     return "success", best
 
 
-def download_single_spotify_track(row, index):
+def download_single_spotify_track(row: Dict[str, str], index: int) -> Tuple[str, Union[Dict[str, Any], str]]:
     """
     Wrapper alias for processing a single Spotify track entry.
     """
@@ -307,10 +308,10 @@ def download_single_spotify_track(row, index):
     return process_single_track(row, index, cfg)
 
 
-def run_download():
+def run_download() -> None:
     """
     Main multi-threaded download runner for Spotify playlist tracks.
-    Reads max_workers (default 5) from config.json.
+    Reads max_workers (default 10) from config.json.
     """
     if not TRACKS_CSV.exists():
         print("ERROR: data/tracks.csv not found.")
@@ -347,7 +348,7 @@ def run_download():
 
     print(f"\nProcessing {len(pending_tracks)} remaining tracks with {max_workers} concurrent threads...\n")
 
-    def worker_task(item):
+    def worker_task(item: Tuple[Dict[str, str], int]) -> None:
         row, index = item
         status, result = process_single_track(row, index, cfg)
         key = str(index)
@@ -381,3 +382,4 @@ def run_download():
                 print(f"Worker exception: {e}")
 
     print_banner("PLAYLIST PROCESSING COMPLETE")
+

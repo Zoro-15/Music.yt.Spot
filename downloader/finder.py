@@ -1,10 +1,11 @@
 import json
 import shutil
 from pathlib import Path
+from typing import Optional, Union, List, Tuple, Set
 from downloader.utils import INPUT_DIR, BASE_DIR, find_downloads_dirs
 
 
-def is_valid_exportify_json(file_path):
+def is_valid_exportify_json(file_path: Path) -> bool:
     """
     Checks if a JSON file matches any Spotify playlist structure (Exportify, Spotify API, Soundiiz, etc.).
     """
@@ -29,7 +30,7 @@ def is_valid_exportify_json(file_path):
     return False
 
 
-def discover_playlist_json(provided_path=None):
+def discover_playlist_json(provided_path: Optional[Union[str, Path]] = None) -> Optional[Path]:
     """
     Discovers Exportify JSON playlist files across input/, project root, and Android Downloads folders,
     and presents a numbered selection menu to the user.
@@ -40,8 +41,8 @@ def discover_playlist_json(provided_path=None):
             return p
         print(f"WARNING: Specified file '{provided_path}' does not exist or is not a valid Exportify JSON.")
 
-    all_found = []
-    seen_paths = set()
+    all_found: List[Tuple[Path, str]] = []
+    seen_paths: Set[Path] = set()
 
     # 1. Search input/ directory
     for f in INPUT_DIR.glob("*.json"):
@@ -91,4 +92,5 @@ def discover_playlist_json(provided_path=None):
             return selected_file
 
     return selected_file
+
 

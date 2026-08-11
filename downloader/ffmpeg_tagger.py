@@ -1,7 +1,9 @@
+from pathlib import Path
+from typing import Tuple
 from downloader.utils import run_command
 
 
-def apply_spotify_metadata(audio_file, title, artist, album):
+def apply_spotify_metadata(audio_file: Path, title: str, artist: str, album: str) -> Tuple[bool, str]:
     """
     Injects track title, artist, album, genre, and source comment into the audio file
     using FFmpeg stream copy (-c copy). Does NOT re-encode audio.
@@ -43,7 +45,13 @@ def apply_spotify_metadata(audio_file, title, artist, album):
             if temp_file.exists():
                 temp_file.unlink()
             return False, f"Failed to replace audio file: {e}"
-def crop_square_artwork(image_path):
+    else:
+        if temp_file.exists():
+            temp_file.unlink()
+        return False, f"Metadata write failed: {stderr}"
+
+
+def crop_square_artwork(image_path: Path) -> Tuple[bool, str]:
     """
     Crops downloaded artwork (.webp / .jpg) to a 1:1 square aspect ratio using FFmpeg.
     Eliminates letterboxing (black top/bottom or side bars).
@@ -75,4 +83,5 @@ def crop_square_artwork(image_path):
         if temp_crop.exists():
             temp_crop.unlink()
         return False, "FFmpeg crop failed"
+
 

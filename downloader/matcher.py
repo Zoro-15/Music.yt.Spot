@@ -1,11 +1,12 @@
 import json
+from typing import List, Dict, Tuple, Set, Any
 from downloader.utils import normalize, words, run_command, get_ytdlp_auth_args
 
 SEARCH_COUNT = 5
 MIN_SCORE = 70
 
 
-def similarity(title, candidate):
+def similarity(title: str, candidate: str) -> float:
     """Calculates word overlap ratio between Spotify title and YouTube candidate title."""
     a = words(title)
     b = words(candidate)
@@ -14,7 +15,7 @@ def similarity(title, candidate):
     return len(a & b) / len(a)
 
 
-def artist_match(artists, candidate_title, candidate_channel):
+def artist_match(artists: str, candidate_title: str, candidate_channel: str) -> int:
     """Evaluates artist presence in candidate title or channel name."""
     haystack = normalize(f"{candidate_title} {candidate_channel}")
     score = 0
@@ -41,7 +42,7 @@ def artist_match(artists, candidate_title, candidate_channel):
     return min(score, 40)
 
 
-def bad_candidate(title):
+def bad_candidate(title: str) -> bool:
     """Detects unwanted track variants (slowed, reverb, cover, remix, etc.)."""
     t = normalize(title)
     bad_words = [
@@ -62,7 +63,7 @@ def bad_candidate(title):
     return any(w in t for w in bad_words)
 
 
-def score_candidate(spotify_title, spotify_artists, yt_title, channel):
+def score_candidate(spotify_title: str, spotify_artists: str, yt_title: str, channel: str) -> int:
     """
     Scores a YouTube candidate (0 to 100) based on title similarity, artist presence,
     prefix matching, and penalty words.
@@ -90,7 +91,13 @@ def score_candidate(spotify_title, spotify_artists, yt_title, channel):
     return max(0, min(100, score))
 
 
-def search_youtube(title, artists, count=SEARCH_COUNT, min_score=MIN_SCORE, use_ytmusic=True):
+def search_youtube(
+    title: str,
+    artists: str,
+    count: int = SEARCH_COUNT,
+    min_score: int = MIN_SCORE,
+    use_ytmusic: bool = True,
+) -> Tuple[List[Dict[str, Any]], str]:
     """
     Queries YouTube using multi-pass search strategy (YTM topic search -> main YT -> fallback query)
     and returns sorted, scored candidates.
@@ -102,8 +109,8 @@ def search_youtube(title, artists, count=SEARCH_COUNT, min_score=MIN_SCORE, use_
     search_queries.append(f"{title} Official Audio")
     search_queries.append(f"{title}")
 
-    all_candidates = []
-    seen_urls = set()
+    all_candidates: List[Dict[str, Any]] = []
+    seen_urls: Set[str] = set()
 
     for query in search_queries:
         cmd = [
@@ -158,4 +165,5 @@ def search_youtube(title, artists, count=SEARCH_COUNT, min_score=MIN_SCORE, use_
         return all_candidates, ""
 
     return [], "No YouTube search candidates found"
+
 

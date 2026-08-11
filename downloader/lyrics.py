@@ -3,18 +3,19 @@ import re
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Tuple, Union, Optional
 
 
-def clean_artist_name(artist):
+def clean_artist_name(artist: str) -> str:
     """Strips feat/ft/collaborators to get primary artist for LRCLIB search."""
     if not artist:
         return ""
     # Extract primary artist before comma, feat, or ft
-    primary = re.split(f",| feat\\.| ft\\.|&", artist, flags=re.IGNORECASE)[0]
+    primary = re.split(r",| feat\.| ft\.|&", artist, flags=re.IGNORECASE)[0]
     return primary.strip()
 
 
-def fetch_lyrics(title, artist, album, output_audio_path):
+def fetch_lyrics(title: str, artist: str, album: str, output_audio_path: Path) -> Tuple[bool, Union[Path, str]]:
     """
     Queries LRCLIB REST API for synchronized (.lrc) or plain lyrics using multi-pass search
     (exact match -> primary artist match -> fuzzy title search).
@@ -61,9 +62,10 @@ def fetch_lyrics(title, artist, album, output_audio_path):
     return False, "No lyrics found on LRCLIB"
 
 
-def _save_lrc(output_audio_path, lyrics_text):
+def _save_lrc(output_audio_path: Path, lyrics_text: str) -> Tuple[bool, Path]:
     """Helper to write lyrics to .lrc file next to audio track."""
     lrc_path = Path(output_audio_path).with_suffix(".lrc")
     with open(lrc_path, "w", encoding="utf-8") as f:
         f.write(lyrics_text)
     return True, lrc_path
+

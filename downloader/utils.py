@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from typing import Optional, List, Tuple, Set, Dict, Any
 
 # ============================================================
 # PROJECT DIRECTORIES
@@ -28,7 +29,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # SUBPROCESS HELPER
 # ============================================================
 
-def run_command(cmd, cwd=None):
+def run_command(cmd: List[str], cwd: Optional[Path] = None) -> Tuple[int, str, str]:
     """
     Executes a shell command via subprocess and returns (returncode, stdout, stderr).
     """
@@ -47,7 +48,7 @@ def run_command(cmd, cwd=None):
         return 1, "", str(e)
 
 
-def find_downloads_dirs():
+def find_downloads_dirs() -> List[Path]:
     """
     Returns candidate download paths for Termux / Android.
     """
@@ -61,11 +62,11 @@ def find_downloads_dirs():
     return [d for d in candidates if d.exists() and d.is_dir()]
 
 
-def get_ytdlp_auth_args():
+def get_ytdlp_auth_args() -> List[str]:
     """
     Returns authentication / player client arguments for yt-dlp.
     Auto-discovers cookies.txt in project root, input/, data/, or Android Downloads folders.
-    Otherwise uses Android YouTube app User-Agent + player_client=android,ios to bypass YouTube bot checks.
+    Otherwise uses Android YouTube app User-Agent + player_client=android_vr,web_creator to bypass YouTube bot checks.
     """
     # 1. Search project directories for any *cookie*.txt file
     for p_dir in [BASE_DIR, INPUT_DIR, DATA_DIR]:
@@ -104,7 +105,7 @@ def get_ytdlp_auth_args():
 # TEXT HELPERS & SANITIZATION
 # ============================================================
 
-def normalize(text):
+def normalize(text: str) -> str:
     """
     Normalizes string by lowercasing, converting non-word characters to spaces,
     and stripping extra whitespace.
@@ -117,13 +118,13 @@ def normalize(text):
     return text
 
 
-def words(text):
+def words(text: str) -> Set[str]:
     """Returns a set of normalized unique words."""
     norm = normalize(text)
     return set(norm.split()) if norm else set()
 
 
-def sanitize_filename(name):
+def sanitize_filename(name: str) -> str:
     """
     Sanitizes string to be a valid, cross-platform filename (Android / Linux / Windows).
     Removes invalid characters (< > : " / \\ | ? * \\x00-\\x1f) and trims dots/spaces.
@@ -139,7 +140,7 @@ def sanitize_filename(name):
     return sanitized if sanitized else "unnamed_track"
 
 
-def print_banner(text):
+def print_banner(text: str) -> None:
     """Prints a styled banner for terminal UI."""
     width = 70
     print()
@@ -153,7 +154,7 @@ def print_banner(text):
 # ANDROID MUSIC SYSTEM INTEGRATION
 # ============================================================
 
-def find_android_music_dir():
+def find_android_music_dir() -> Optional[Path]:
     """Returns candidate Android system Music folder path if available."""
     home = Path.home()
     candidates = [
@@ -168,7 +169,25 @@ def find_android_music_dir():
     return None
 
 
-def sync_to_android_music(file_path):
+def trigger_android_media_scanner(file_path: Path) -> bool:
+    """
+    Triggers Android MediaScanner broadcast to index new music files immediately.
+    """
+    if not file_path.exists():
+        return False
+    try:
+        cmd = [
+            "am", "broadcast",
+            "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+            "-d", f"file://{file_path.resolve()}"
+        ]
+        code, _, _ = run_command(cmd)
+        return code == 0
+    except Exception:
+        return False
+
+
+def sync_to_android_music(file_path: Path) -> Tuple[bool, str]:
     """
     Copies completed audio / thumbnail / lyrics files to the Android system Music folder.
     """
@@ -186,7 +205,7 @@ def sync_to_android_music(file_path):
         return False, f"Could not sync to Music folder: {e}"
 
 
-def clean_project_cache(include_output=False):
+def clean_project_cache(include_output: bool = False) -> bool:
     """
     Clears generated playlist CSV, progress state, logs, temporary files, and __pycache__.
     If include_output is True, also clears the output directory.
@@ -246,5 +265,6 @@ def clean_project_cache(include_output=False):
 
     print(f"\nCleanup complete. Removed {removed_count} files/caches.")
     return True
+
 
 

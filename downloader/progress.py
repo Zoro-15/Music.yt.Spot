@@ -1,9 +1,10 @@
 import csv
 import json
+from typing import Dict, Any, Union
 from downloader.utils import PROGRESS_FILE, TRACKS_CSV, FAILED_FILE, REVIEW_FILE
 
 
-def load_progress():
+def load_progress() -> Dict[str, Dict[str, Any]]:
     """Loads current progress state from data/progress.json."""
     if not PROGRESS_FILE.exists():
         return {}
@@ -14,7 +15,7 @@ def load_progress():
         return {}
 
 
-def save_progress(progress):
+def save_progress(progress: Dict[str, Dict[str, Any]]) -> None:
     """Saves progress atomically to data/progress.json."""
     tmp = PROGRESS_FILE.with_suffix(".tmp")
     try:
@@ -25,7 +26,7 @@ def save_progress(progress):
         print(f"WARNING: Could not save progress state: {e}")
 
 
-def log_failed(index, title, artist, reason):
+def log_failed(index: Union[int, str], title: str, artist: str, reason: str) -> None:
     """Logs a failed track to data/failed.txt."""
     try:
         with open(FAILED_FILE, "a", encoding="utf-8") as f:
@@ -34,7 +35,7 @@ def log_failed(index, title, artist, reason):
         print(f"WARNING: Could not write to failed.txt: {e}")
 
 
-def log_review(index, title, artist, score, yt_title, url):
+def log_review(index: Union[int, str], title: str, artist: str, score: Union[int, str], yt_title: str, url: str) -> None:
     """Logs a low-confidence track to data/review.txt."""
     try:
         with open(REVIEW_FILE, "a", encoding="utf-8") as f:
@@ -43,7 +44,7 @@ def log_review(index, title, artist, score, yt_title, url):
         print(f"WARNING: Could not write to review.txt: {e}")
 
 
-def show_status():
+def show_status() -> None:
     """Prints a clear summary report of current downloading progress."""
     total = 0
     if TRACKS_CSV.exists():
@@ -71,3 +72,4 @@ def show_status():
     print(f" Remaining tracks   : {remaining}")
     print("=" * 40)
     print()
+

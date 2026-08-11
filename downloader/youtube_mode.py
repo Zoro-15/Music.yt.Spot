@@ -10,7 +10,7 @@ from downloader.utils import (
 )
 
 
-def download_from_link(url):
+def download_from_link(url: str) -> bool:
     """
     Universal link downloader. Handles:
     - YouTube Music playlists & albums (music.youtube.com/playlist?list=...)
@@ -31,7 +31,7 @@ def download_from_link(url):
         return download_youtube_video(url)
 
 
-def download_youtube_playlist(url):
+def download_youtube_playlist(url: str) -> bool:
     """
     Downloads a complete YouTube or YT Music playlist/album directly using yt-dlp
     with native audio preservation, archive tracking, thumbnail embedding, and index ordering.
@@ -83,7 +83,7 @@ def download_youtube_playlist(url):
         return False
 
 
-def download_youtube_video(url):
+def download_youtube_video(url: str) -> bool:
     """
     Downloads a single YouTube or YT Music video audio file natively with metadata and thumbnail.
     """
@@ -129,3 +129,4 @@ def download_youtube_video(url):
         print("\nERROR: Download encountered issues:")
         print(stderr[-2000:] if stderr else "Unknown download failure")
         return False
+

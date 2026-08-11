@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
+from typing import Dict, Any
 from downloader.utils import BASE_DIR
 
 CONFIG_FILE = BASE_DIR / "config.json"
 
-DEFAULT_CONFIG = {
+DEFAULT_CONFIG: Dict[str, Any] = {
     "max_workers": 10,
     "min_score": 70,
     "ytmusic_priority": True,
@@ -15,7 +16,7 @@ DEFAULT_CONFIG = {
 }
 
 
-def load_config():
+def load_config() -> Dict[str, Any]:
     """Loads configuration settings from config.json or initializes default file."""
     if not CONFIG_FILE.exists():
         save_config(DEFAULT_CONFIG)
@@ -33,10 +34,11 @@ def load_config():
         return DEFAULT_CONFIG.copy()
 
 
-def save_config(cfg):
+def save_config(cfg: Dict[str, Any]) -> None:
     """Saves configuration dict to config.json."""
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2)
     except Exception as e:
         print(f"WARNING: Could not write config.json: {e}")
+

@@ -1,11 +1,12 @@
 import sys
 from pathlib import Path
+from typing import List, Dict, Any
 from downloader.utils import REVIEW_FILE, FAILED_FILE, print_banner
 from downloader.spotify_mode import download_single_spotify_track
 from downloader.progress import load_progress, save_progress
 
 
-def run_review_mode():
+def run_review_mode() -> None:
     """
     Interactive terminal interface for reviewing and re-downloading low-confidence
     or failed tracks.
@@ -16,7 +17,7 @@ def run_review_mode():
         print("No low-confidence tracks currently in data/review.txt.")
         return
 
-    items = []
+    items: List[Dict[str, str]] = []
     with open(REVIEW_FILE, "r", encoding="utf-8") as f:
         for line in f:
             parts = line.strip().split("\t")
@@ -98,3 +99,4 @@ def run_review_mode():
                 }
                 save_progress(progress)
                 print("Custom track downloaded successfully!")
+

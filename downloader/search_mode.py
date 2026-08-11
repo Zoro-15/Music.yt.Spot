@@ -12,7 +12,7 @@ from downloader.utils import (
 )
 
 
-def search_and_download_song(query):
+def search_and_download_song(query: str) -> bool:
     """
     Searches YouTube / YouTube Music by song name, displays top candidate,
     and downloads native audio, artwork (cropped 1:1), metadata, and synced lyrics.
@@ -107,3 +107,4 @@ def search_and_download_song(query):
 
     print_banner(f"✓ SONG DOWNLOAD COMPLETE: {best['title']}")
     return True
+
