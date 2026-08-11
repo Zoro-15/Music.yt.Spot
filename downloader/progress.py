@@ -78,12 +78,34 @@ def show_status() -> None:
     print()
 
 
+def extract_artist_tag(audio_obj: Any) -> str:
+    """Extracts artist tag string from Mutagen audio object."""
+    if audio_obj is None:
+        return ""
+    try:
+        if hasattr(audio_obj, "get"):
+            if "©ART" in audio_obj:
+                val = audio_obj["©ART"]
+                return val[0] if isinstance(val, list) and val else str(val)
+            if "ARTIST" in audio_obj:
+                val = audio_obj["ARTIST"]
+                return val[0] if isinstance(val, list) and val else str(val)
+        if hasattr(audio_obj, "tags") and audio_obj.tags:
+            tpe1 = audio_obj.tags.get("TPE1")
+            if tpe1:
+                return str(tpe1.text[0]) if hasattr(tpe1, "text") and tpe1.text else str(tpe1)
+    except Exception:
+        pass
+    return ""
+
+
 def audit_and_fix_mismatched_tracks(force_delete: bool = True, reset_failed: bool = True) -> int:
     """
-    Audits existing downloaded tracks in output/ directory against target durations in tracks.csv.
+    Audits existing downloaded tracks across output/ and Android Music folders against target metadata in tracks.csv.
     Removes wrong/mismatched audio files and resets failed tracks so they can all be re-downloaded correctly.
     """
-    from downloader.utils import OUTPUT_DIR, print_banner, sanitize_filename
+    from downloader.utils import OUTPUT_DIR, find_android_music_dir, print_banner, sanitize_filename
+    from downloader.matcher import score_candidate, artist_match
     from pathlib import Path
 
     if not TRACKS_CSV.exists():
@@ -115,60 +137,86 @@ def audit_and_fix_mismatched_tracks(force_delete: bool = True, reset_failed: boo
     except ImportError:
         mutagen = None
 
+    search_dirs: List[Path] = [OUTPUT_DIR]
+    android_dir = find_android_music_dir()
+    if android_dir and android_dir.exists() and android_dir.is_dir():
+        search_dirs.append(android_dir)
+
     for idx, target in target_map.items():
         title = target["title"]
+        target_artist = target.get("artist") or ""
         target_dur = int(target.get("duration_sec") or 0)
         safe_title = sanitize_filename(title)
         filename_with_idx = f"{int(idx):03d} - {safe_title}"
 
-        # Find file in output/
+        # Search across output/ and Android Music folder
         found_file: Optional[Path] = None
-        for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
-            p1 = OUTPUT_DIR / f"{filename_with_idx}{ext}"
-            p2 = OUTPUT_DIR / f"{safe_title}{ext}"
-            if p1.exists():
-                found_file = p1
+        for d in search_dirs:
+            for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
+                p1 = d / f"{filename_with_idx}{ext}"
+                p2 = d / f"{safe_title}{ext}"
+                if p1.exists():
+                    found_file = p1
+                    break
+                elif p2.exists():
+                    found_file = p2
+                    break
+            if found_file:
                 break
-            elif p2.exists():
-                found_file = p2
-                break
-
-        if not found_file or not found_file.exists():
-            continue
 
         is_mismatch = False
         reason = ""
 
-        # Audit 1: Check actual audio duration if target_dur is available
-        if target_dur > 0 and mutagen is not None:
+        # Audit 1: Check actual audio duration & artist tags on disk via Mutagen
+        if found_file and found_file.exists() and mutagen is not None:
             try:
                 audio_info = mutagen.File(found_file)
-                if audio_info and hasattr(audio_info, "info") and hasattr(audio_info.info, "length"):
-                    actual_dur = int(audio_info.info.length)
-                    diff = abs(actual_dur - target_dur)
-                    if diff > 30 or (diff / max(target_dur, 1)) > 0.2:
-                        is_mismatch = True
-                        reason = f"Duration mismatch (File: {actual_dur // 60}:{actual_dur % 60:02d}, Target: {target_dur // 60}:{target_dur % 60:02d})"
+                if audio_info:
+                    # Check duration
+                    if target_dur > 0 and hasattr(audio_info, "info") and hasattr(audio_info.info, "length"):
+                        actual_dur = int(audio_info.info.length)
+                        diff = abs(actual_dur - target_dur)
+                        if diff > 30 or (diff / max(target_dur, 1)) > 0.2:
+                            is_mismatch = True
+                            reason = f"Duration mismatch (File: {actual_dur // 60}:{actual_dur % 60:02d}, Target: {target_dur // 60}:{target_dur % 60:02d})"
+
+                    # Check artist tag
+                    if not is_mismatch and target_artist:
+                        file_artist = extract_artist_tag(audio_info)
+                        if file_artist and artist_match(target_artist, "", file_artist) == 0:
+                            is_mismatch = True
+                            reason = f"Artist tag mismatch on disk (File Artist: '{file_artist}', Target Artist: '{target_artist}')"
             except Exception:
                 pass
 
-        # Audit 2: Check if marked as review/low score in progress
+        # Audit 2: Re-evaluate recorded match in progress.json against updated matcher scoring
         if not is_mismatch and idx in progress:
-            p_status = progress[idx].get("status")
-            score = progress[idx].get("score") or 100
+            p_entry = progress[idx]
+            p_status = p_entry.get("status")
+            score = p_entry.get("score") or 100
+            yt_title = p_entry.get("youtube_title") or ""
+            yt_channel = p_entry.get("youtube_channel") or ""
+
             if p_status == "review" or score < 60:
                 is_mismatch = True
                 reason = f"Low confidence match score ({score}/100)"
+            elif yt_title and yt_channel and target_artist:
+                # Re-evaluate with updated strict candidate scorer
+                new_score = score_candidate(title, target_artist, yt_title, yt_channel, target_duration=target_dur)
+                if new_score < 70:
+                    is_mismatch = True
+                    reason = f"Re-evaluated match score failed quality threshold ({new_score}/100)"
 
         if is_mismatch:
             mismatched_count += 1
             print(f" ⚠️ Flagged Track #{idx} '{title}': {reason}")
             if force_delete:
-                try:
-                    found_file.unlink()
-                    print(f"    ✓ Removed wrong file: {found_file.name}")
-                except Exception as e:
-                    print(f"    ✖ Could not remove {found_file.name}: {e}")
+                if found_file and found_file.exists():
+                    try:
+                        found_file.unlink()
+                        print(f"    ✓ Removed wrong file: {found_file.name}")
+                    except Exception as e:
+                        print(f"    ✖ Could not remove {found_file.name}: {e}")
 
                 if idx in progress:
                     del progress[idx]
