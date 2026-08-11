@@ -103,10 +103,11 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
     filename_with_idx = f"{index:03d} - {safe_title}"
     music_dir = find_android_music_dir()
 
-    for ext in [".m4a", ".webm", ".opus", ".mp3", ".aac"]:
+    for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
         if ((OUTPUT_DIR / f"{filename_with_idx}{ext}").exists() or (OUTPUT_DIR / f"{safe_title}{ext}").exists() or
             (music_dir and ((music_dir / f"{filename_with_idx}{ext}").exists() or (music_dir / f"{safe_title}{ext}").exists()))):
             return "success", {"title": title, "channel": "Local Disk", "score": 100}
+
 
     candidates, error = search_youtube(title, artists, min_score=min_score, use_ytmusic=use_ytmusic, target_duration_sec=target_duration_sec)
     if error or not candidates:
@@ -132,27 +133,44 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
         return "failed", stderr.strip().splitlines()[-1] if stderr and stderr.strip() else "Unknown error"
 
     downloaded = list(OUTPUT_DIR.glob(f"{filename}.*"))
-    audio_files = [p for p in downloaded if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac"]]
+    audio_files = [p for p in downloaded if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]]
     thumb_files = [p for p in downloaded if p.suffix.lower() in [".webp", ".jpg", ".jpeg", ".png"]]
 
-    if audio_files:
-        audio = audio_files[0]
-        if thumb_files and cfg.get("square_crop_artwork", True):
-            crop_square_artwork(thumb_files[0])
-        cover_bytes = fetch_high_res_cover(title, artists, preferred_url=cover_url) if cfg.get("fetch_high_res_cover", True) else None
-        lyrics_text = None
-        if cfg.get("fetch_lyrics", True):
-            success, res, raw_lyrics = fetch_lyrics(title, artists, album, audio)
-            if success:
-                lyrics_text = raw_lyrics
-                if isinstance(res, Path) and cfg.get("auto_sync_android_music", True):
-                    sync_to_android_music(res)
+    if not audio_files:
+        return "failed", "yt-dlp completed but output audio file is missing"
 
-        apply_native_metadata(audio, title, artists, album, image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None, track_number=index)
-        if cfg.get("auto_sync_android_music", True):
-            sync_to_android_music(audio)
+    audio = audio_files[0]
+
+    # Convert .webm (Opus) container to native .opus audio container losslessly (0 re-encoding)
+    if audio.suffix.lower() == ".webm":
+        opus_path = audio.with_suffix(".opus")
+        remux_cmd = ["ffmpeg", "-y", "-i", str(audio), "-c:a", "copy", str(opus_path)]
+        r_code, _, _ = run_command(remux_cmd)
+        if r_code == 0 and opus_path.exists():
+            try:
+                audio.unlink()
+                audio = opus_path
+            except Exception:
+                pass
+
+    if thumb_files and cfg.get("square_crop_artwork", True):
+        crop_square_artwork(thumb_files[0])
+
+    cover_bytes = fetch_high_res_cover(title, artists, preferred_url=cover_url) if cfg.get("fetch_high_res_cover", True) else None
+    lyrics_text = None
+    if cfg.get("fetch_lyrics", True):
+        success, res, raw_lyrics = fetch_lyrics(title, artists, album, audio)
+        if success:
+            lyrics_text = raw_lyrics
+            if isinstance(res, Path) and cfg.get("auto_sync_android_music", True):
+                sync_to_android_music(res)
+
+    apply_native_metadata(audio, title, artists, album, image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None, track_number=index)
+    if cfg.get("auto_sync_android_music", True):
+        sync_to_android_music(audio)
 
     return "success", best
+
 
 
 def download_single_spotify_track(row: Dict[str, str], index: int) -> Tuple[str, Union[Dict[str, Any], str]]:

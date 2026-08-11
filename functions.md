@@ -263,4 +263,5 @@ python main.py clean --all
 | `square_crop_artwork` | `true` | Crops 16:9 thumbnails to 1:1 square ratio using FFmpeg. |
 | `auto_sync_android_music` | `true` | Copies files to `/sdcard/Music` and triggers MediaScanner. |
 | `include_index_in_filename` | `false` | Prefixes track number in filenames (e.g. `001 - Song.m4a`). |
-| `audio_format` | `"best_native"` | Selects highest native stream (`webm`/`opus` or `m4a`/`aac`) with zero re-encoding. |
+| `audio_format` | `"best_native"` | Selects highest native stream (`opus` / `m4a`) with zero re-encoding. WebM containers are automatically remuxed to native `.opus` audio containers for 100% Android player compatibility. |
+

@@ -214,12 +214,13 @@ def trigger_android_media_scanner(file_path: Path) -> bool:
 
 
 def sync_to_android_music(file_path: Path) -> Tuple[bool, str]:
-    """
-    Copies completed audio / thumbnail / lyrics files to the Android system Music folder.
-    """
+    """Copies completed audio (.opus/.m4a) and lyrics files to the Android system Music folder."""
     music_dir = find_android_music_dir()
     if not music_dir or not file_path.exists():
         return False, "Android Music directory not found"
+
+    if file_path.suffix.lower() == ".webm":
+        return False, "Skipping .webm video container file"
 
     try:
         dest = music_dir / file_path.name
@@ -229,6 +230,7 @@ def sync_to_android_music(file_path: Path) -> Tuple[bool, str]:
         return True, f"Synced to Android Music: {dest.name}"
     except Exception as e:
         return False, f"Could not sync to Music folder: {e}"
+
 
 
 def clean_project_cache(include_output: bool = False) -> bool:
@@ -303,8 +305,9 @@ def generate_m3u8_playlist(playlist_name: str, audio_files: List[Path]) -> Optio
         with open(m3u_path, "w", encoding="utf-8") as f:
             f.write("#EXTM3U\n")
             for audio in sorted(audio_files):
-                if audio.is_file() and audio.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]:
+                if audio.is_file() and audio.suffix.lower() in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
                     f.write(f"{audio.name}\n")
+
         print(f" ✓ Generated Playlist File: {m3u_path.name}")
         return m3u_path
     except Exception as e:
