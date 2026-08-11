@@ -27,13 +27,13 @@ termux-setup-storage
 # 2. Clone repository & install dependencies
 git clone https://github.com/Zoro-15/Music.yt.Spot.git
 cd Music.yt.Spot
-python -m pip install -U -r requirements.txt yt-dlp
+python -m pip install -U -r requirements.txt mutagen yt-dlp rich
 
 # 3. Launch interactive menu
 python main.py
 ```
 
-> **Updating Existing App**: Run `cd ~/Music.yt.Spot && git pull` anytime to fetch the latest updates!
+> **Updating Existing App**: Run `cd ~/Music.yt.Spot && git pull && python -m pip install -U -r requirements.txt` anytime to fetch the latest updates!
 
 ---
 
@@ -66,9 +66,10 @@ python main.py link "https://music.youtube.com/playlist?list=..."
 
 | Issue | Quick Solution |
 | :--- | :--- |
+| **Missing Mutagen Module** | Run `python -m pip install -U mutagen` to install native audio tagging dependencies. |
 | **YouTube Bot Check** | Reconnect **Cloudflare WARP (1.1.1.1)** or toggle Airplane Mode / Mobile Data to refresh your IP. |
 | **Cookies Support (Optional)** | Export `cookies.txt` to your phone's `Downloads` folder — the script auto-detects and uses it! |
-| **Prevent Termux Sleep** | Run `termux-wake-lock` before downloading large playlists. |
+| **Prevent Termux Sleep** | Automatically handled! Or run `termux-wake-lock` manually before downloading large playlists. |
 
 ---
 
