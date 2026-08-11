@@ -153,6 +153,9 @@ def interactive_menu():
         elif choice == "9" or choice.lower() in ["exit", "q"]:
             print("\nGoodbye!")
             break
+        elif choice.startswith(("http://", "https://", "spotify:")):
+            download_from_link(choice)
+            input("\nPress Enter to return to menu...")
         else:
             print("\nInvalid choice. Please enter a number between 1 and 9.")
 

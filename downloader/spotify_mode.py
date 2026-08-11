@@ -114,15 +114,20 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
     filename_with_idx = f"{index:03d} - {safe_title}"
     music_dir = find_android_music_dir()
 
-    # Strictly check if this specific track file exists in OUTPUT_DIR
-    for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
-        existing = OUTPUT_DIR / f"{filename_with_idx}{ext}"
-        if not existing.exists():
-            existing = OUTPUT_DIR / f"{safe_title}{ext}"
-        if existing.exists() and existing.is_file() and existing.stat().st_size > 1000:
-            if cfg.get("auto_sync_android_music", True):
-                sync_to_android_music(existing)
-            return "success", {"title": title, "channel": "Local Disk", "score": 100}
+    # Check if this track already exists in OUTPUT_DIR or Android system Music directory
+    search_dirs = [OUTPUT_DIR]
+    if music_dir and music_dir.exists():
+        search_dirs.append(music_dir)
+
+    for d in search_dirs:
+        for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
+            existing = d / f"{filename_with_idx}{ext}"
+            if not existing.exists():
+                existing = d / f"{safe_title}{ext}"
+            if existing.exists() and existing.is_file() and existing.stat().st_size > 1000:
+                if d == OUTPUT_DIR and cfg.get("auto_sync_android_music", True):
+                    sync_to_android_music(existing)
+                return "success", {"title": title, "channel": "Local Disk", "score": 100}
 
 
 

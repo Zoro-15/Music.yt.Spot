@@ -37,8 +37,41 @@ def download_youtube_playlist(url: str) -> bool:
     output_template = str(OUTPUT_DIR / "%(playlist_index)03d - %(title)s.%(ext)s")
     before_files = set(OUTPUT_DIR.glob("*.*"))
 
-    cmd = ["yt-dlp", "--yes-playlist", "--download-archive", str(archive_file), "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, url]
+    # Convert YT Music Album playlist list=OLAK5uy_ to Video List list=VLOLAK5uy_ to prevent youtube:tab extractor errors
+    clean_url = url
+    if "list=OLAK5uy_" in clean_url:
+        clean_url = clean_url.replace("list=OLAK5uy_", "list=VLOLAK5uy_")
+    elif "list=olAK5uy_" in clean_url:
+        clean_url = clean_url.replace("list=olAK5uy_", "list=VLOLAK5uy_")
+
+    cmd = [
+        "yt-dlp",
+        "--yes-playlist",
+        "--download-archive", str(archive_file),
+        "--retries", "5",
+        "--fragment-retries", "5",
+        "--retry-sleep", "2",
+        "--socket-timeout", "30",
+        "--continue",
+        "--extractor-args", "youtube:player_client=android,web",
+    ] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, clean_url]
+
     code, stdout, stderr = run_command(cmd)
+
+    # Fallback retry with raw URL or ios client if primary attempt failed
+    if code != 0:
+        fallback_cmd = [
+            "yt-dlp",
+            "--yes-playlist",
+            "--download-archive", str(archive_file),
+            "--retries", "5",
+            "--fragment-retries", "5",
+            "--retry-sleep", "2",
+            "--socket-timeout", "30",
+            "--continue",
+            "--extractor-args", "youtube:player_client=ios,web",
+        ] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, url]
+        code, stdout, stderr = run_command(fallback_cmd)
 
     if code == 0:
         new_files = set(OUTPUT_DIR.glob("*.*")) - before_files
