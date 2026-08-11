@@ -38,13 +38,10 @@ def download_youtube_playlist(url: str) -> bool:
     output_template = str(OUTPUT_DIR / "%(playlist_index)03d - %(title)s.%(ext)s")
     before_files = set(OUTPUT_DIR.glob("*.*"))
 
-    # Normalize YT Music URLs to standard www.youtube.com video list playlist URLs
-    clean_url = url.strip().replace("music.youtube.com", "www.youtube.com").replace("youtube.com", "www.youtube.com").replace("www.www.youtube.com", "www.youtube.com")
-    if "list=OLAK5uy_" in clean_url:
-        clean_url = clean_url.replace("list=OLAK5uy_", "list=VLOLAK5uy_")
-    elif "list=olAK5uy_" in clean_url:
-        clean_url = clean_url.replace("list=olAK5uy_", "list=VLOLAK5uy_")
+    raw_url = url.strip()
+    www_url = raw_url.replace("music.youtube.com", "www.youtube.com")
 
+    # Tier 1: Direct playlist download on www.youtube.com
     cmd = [
         "yt-dlp",
         "--yes-playlist",
@@ -54,26 +51,43 @@ def download_youtube_playlist(url: str) -> bool:
         "--retry-sleep", "2",
         "--socket-timeout", "30",
         "--continue",
-        "--extractor-args", "youtube:player_client=android,web",
-    ] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, clean_url]
+    ] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, www_url]
 
     code, stdout, stderr = run_command(cmd)
 
-    # Fallback: Extract video entries individually if playlist extraction encountered issues
+    # Tier 2: Fallback direct playlist download on raw URL
+    if code != 0 and www_url != raw_url:
+        cmd_raw = [
+            "yt-dlp",
+            "--yes-playlist",
+            "--download-archive", str(archive_file),
+            "--retries", "5",
+            "--fragment-retries", "5",
+            "--retry-sleep", "2",
+            "--socket-timeout", "30",
+            "--continue",
+        ] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, raw_url]
+        code, stdout, stderr = run_command(cmd_raw)
+
+    # Tier 3: Ultimate Fallback — Extract entries via flat-playlist and download individual tracks
     if code != 0:
         print("  Notice: Retrying playlist download using flat-playlist track resolution...")
-        flat_cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", clean_url]
-        f_code, f_stdout, _ = run_command(flat_cmd)
-
         video_urls = []
-        if f_code == 0 and f_stdout.strip():
-            try:
-                entries = (json.loads(f_stdout) or {}).get("entries") or []
-                for e in entries:
-                    if e and isinstance(e, dict) and e.get("id"):
-                        video_urls.append(f"https://www.youtube.com/watch?v={e['id']}")
-            except Exception:
-                pass
+
+        for target_u in [www_url, raw_url]:
+            flat_cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", target_u]
+            f_code, f_stdout, _ = run_command(flat_cmd)
+
+            if f_code == 0 and f_stdout.strip():
+                try:
+                    entries = (json.loads(f_stdout) or {}).get("entries") or []
+                    for e in entries:
+                        if e and isinstance(e, dict) and e.get("id"):
+                            video_urls.append(f"https://www.youtube.com/watch?v={e['id']}")
+                    if video_urls:
+                        break
+                except Exception:
+                    pass
 
         if video_urls:
             print(f"  ✓ Extracted {len(video_urls)} track(s) from album playlist. Downloading...")
