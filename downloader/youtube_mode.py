@@ -68,16 +68,39 @@ def download_youtube_playlist(url: str) -> bool:
                 pass
 
     if video_entries:
+        from downloader.utils import find_android_music_dir, sanitize_filename
         total = len(video_entries)
         print(f"\nDownloading {total} Tracks for Album: '{playlist_title}'")
         print("=" * 60)
         success_count = 0
+
+        music_dir = find_android_music_dir()
+        search_dirs = [OUTPUT_DIR]
+        if music_dir and music_dir.exists() and music_dir.is_dir():
+            search_dirs.append(music_dir)
 
         for idx, entry in enumerate(video_entries, 1):
             t_title = entry["title"]
             t_artist = entry["uploader"] or playlist_title
             t_url = entry["url"]
             print(f" [{idx:03d}/{total:03d}] Downloading: '{t_title}'...", end="", flush=True)
+
+            safe_t_title = sanitize_filename(t_title)
+            already_exists = False
+            for d in search_dirs:
+                for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
+                    p1 = d / f"{safe_t_title}{ext}"
+                    p2 = d / f"{idx:03d} - {safe_t_title}{ext}"
+                    if (p1.exists() and p1.is_file() and p1.stat().st_size > 1000) or (p2.exists() and p2.is_file() and p2.stat().st_size > 1000):
+                        already_exists = True
+                        break
+                if already_exists:
+                    break
+
+            if already_exists:
+                print(" ⚡ Already Exists (Skipped)")
+                success_count += 1
+                continue
 
             before_files = set(OUTPUT_DIR.glob("*.*"))
             t_template = str(OUTPUT_DIR / "%(title)s.%(ext)s")
