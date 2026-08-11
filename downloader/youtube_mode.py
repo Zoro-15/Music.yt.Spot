@@ -30,18 +30,82 @@ def download_from_link(url: str) -> bool:
 
 
 def download_youtube_playlist(url: str) -> bool:
-    """Downloads a complete YouTube or YT Music playlist/album directly using yt-dlp."""
+    """Downloads a complete YouTube or YT Music playlist/album directly using yt-dlp with live progress & cover art embedding."""
     import json
+    from downloader.utils import process_and_finalize_audio
+
     cfg = load_config()
     print_banner("Playlist / Album Downloader Mode")
     archive_file = DATA_DIR / "downloaded_archive.txt"
-    output_template = str(OUTPUT_DIR / "%(playlist_index)03d - %(title)s.%(ext)s")
-    before_files = set(OUTPUT_DIR.glob("*.*"))
+    output_template = str(OUTPUT_DIR / "%(title)s.%(ext)s")
 
     raw_url = url.strip()
     www_url = raw_url.replace("music.youtube.com", "www.youtube.com")
 
-    # Tier 1: Direct playlist download on www.youtube.com
+    # Extract album / playlist entry list first using flat-playlist for real-time track-by-track progress & tagging
+    video_entries = []
+    playlist_title = "YouTube Playlist"
+
+    for target_u in [www_url, raw_url]:
+        flat_cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", target_u]
+        f_code, f_stdout, _ = run_command(flat_cmd)
+        if f_code == 0 and f_stdout.strip():
+            try:
+                data = json.loads(f_stdout) or {}
+                playlist_title = data.get("title") or "YouTube Playlist"
+                raw_entries = data.get("entries") or []
+                for e in raw_entries:
+                    if e and isinstance(e, dict) and e.get("id"):
+                        video_entries.append({
+                            "id": e["id"],
+                            "title": e.get("title") or "Track",
+                            "uploader": e.get("uploader") or e.get("channel") or "",
+                            "url": f"https://www.youtube.com/watch?v={e['id']}",
+                        })
+                if video_entries:
+                    break
+            except Exception:
+                pass
+
+    if video_entries:
+        total = len(video_entries)
+        print(f"\nDownloading {total} Tracks for Album: '{playlist_title}'")
+        print("=" * 60)
+        success_count = 0
+
+        for idx, entry in enumerate(video_entries, 1):
+            t_title = entry["title"]
+            t_artist = entry["uploader"] or playlist_title
+            t_url = entry["url"]
+            print(f" [{idx:03d}/{total:03d}] Downloading: '{t_title}'...", end="", flush=True)
+
+            before_files = set(OUTPUT_DIR.glob("*.*"))
+            t_template = str(OUTPUT_DIR / "%(title)s.%(ext)s")
+            v_cmd = ["yt-dlp", "--no-playlist", "--retries", "3", "--socket-timeout", "20"] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", t_template, t_url]
+
+            v_code, _, _ = run_command(v_cmd)
+            if v_code == 0:
+                downloaded = list(set(OUTPUT_DIR.glob("*.*")) - before_files)
+                ok, _, _ = process_and_finalize_audio(
+                    downloaded_files=downloaded,
+                    title=t_title,
+                    artist=t_artist,
+                    album=playlist_title,
+                    cfg=cfg,
+                )
+                if ok:
+                    print(" ✓ Done")
+                    success_count += 1
+                else:
+                    print(" ⚠ Processed with warnings")
+            else:
+                print(" ✖ Failed")
+
+        generate_m3u8_playlist(playlist_title, list(OUTPUT_DIR.glob("*.*")))
+        print_banner(f"✓ ALBUM DOWNLOAD COMPLETE ({success_count}/{total} tracks processed)")
+        return success_count > 0
+
+    # Fallback to direct yt-dlp playlist command if flat-playlist JSON was unavailable
     cmd = [
         "yt-dlp",
         "--yes-playlist",
@@ -53,76 +117,21 @@ def download_youtube_playlist(url: str) -> bool:
         "--continue",
     ] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, www_url]
 
+    before_files = set(OUTPUT_DIR.glob("*.*"))
     code, stdout, stderr = run_command(cmd)
 
-    # Tier 2: Fallback direct playlist download on raw URL
-    if code != 0 and www_url != raw_url:
-        cmd_raw = [
-            "yt-dlp",
-            "--yes-playlist",
-            "--download-archive", str(archive_file),
-            "--retries", "5",
-            "--fragment-retries", "5",
-            "--retry-sleep", "2",
-            "--socket-timeout", "30",
-            "--continue",
-        ] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, raw_url]
-        code, stdout, stderr = run_command(cmd_raw)
-
-    # Tier 3: Ultimate Fallback — Extract entries via flat-playlist and download individual tracks
-    if code != 0:
-        print("  Notice: Retrying playlist download using flat-playlist track resolution...")
-        video_urls = []
-
-        for target_u in [www_url, raw_url]:
-            flat_cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", target_u]
-            f_code, f_stdout, _ = run_command(flat_cmd)
-
-            if f_code == 0 and f_stdout.strip():
-                try:
-                    entries = (json.loads(f_stdout) or {}).get("entries") or []
-                    for e in entries:
-                        if e and isinstance(e, dict) and e.get("id"):
-                            video_urls.append(f"https://www.youtube.com/watch?v={e['id']}")
-                    if video_urls:
-                        break
-                except Exception:
-                    pass
-
-        if video_urls:
-            print(f"  ✓ Extracted {len(video_urls)} track(s) from album playlist. Downloading...")
-            success_count = 0
-            for idx, v_url in enumerate(video_urls, 1):
-                v_template = str(OUTPUT_DIR / f"{idx:03d} - %(title)s.%(ext)s")
-                v_cmd = ["yt-dlp", "--no-playlist", "--retries", "3", "--socket-timeout", "20"] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", v_template, v_url]
-                v_code, _, _ = run_command(v_cmd)
-                if v_code == 0:
-                    success_count += 1
-            if success_count > 0:
-                code = 0
-
     if code == 0:
-        new_files = set(OUTPUT_DIR.glob("*.*")) - before_files
-        for f in new_files:
-            if f.suffix.lower() in [".webp", ".jpg", ".jpeg"] and cfg.get("square_crop_artwork", True):
-                crop_square_artwork(f)
-            elif f.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]:
-                target_f = f
-                if f.suffix.lower() == ".webm":
-                    opus_path = f.with_suffix(".opus")
-                    r_code, _, _ = run_command(["ffmpeg", "-y", "-i", str(f), "-c:a", "copy", str(opus_path)])
-                    if r_code == 0 and opus_path.exists():
-                        try:
-                            f.unlink()
-                            target_f = opus_path
-                        except Exception:
-                            pass
-                if cfg.get("auto_sync_android_music", True):
-                    sync_to_android_music(target_f)
-
-        generate_m3u8_playlist("YouTube Playlist", list(OUTPUT_DIR.glob("*.*")))
+        new_files = list(set(OUTPUT_DIR.glob("*.*")) - before_files)
+        process_and_finalize_audio(
+            downloaded_files=new_files,
+            title="Playlist Track",
+            artist="YouTube Downloader",
+            album=playlist_title,
+            cfg=cfg,
+        )
         print_banner("PLAYLIST / ALBUM DOWNLOAD COMPLETE")
         return True
+
     print(f"\nERROR: Download encountered issues: {stderr[-1000:] if stderr else 'Unknown failure'}")
     return False
 
