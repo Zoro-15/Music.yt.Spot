@@ -50,3 +50,11 @@ def save_config(cfg: Dict[str, Any]) -> None:
     except Exception as e:
         print(f"WARNING: Could not write config.json: {e}")
 
+
+def update_config_key(key: str, val: Any) -> None:
+    """Helper to update a single configuration key in config.json."""
+    cfg = load_config()
+    cfg[key] = val
+    save_config(cfg)
+
+

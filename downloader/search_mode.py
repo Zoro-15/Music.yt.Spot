@@ -57,46 +57,19 @@ def _search_and_download_song_impl(query: str) -> bool:
         return False
 
     downloaded = list(OUTPUT_DIR.glob(f"{safe_title}.*"))
-    audio_files = [p for p in downloaded if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]]
-    thumb_files = [p for p in downloaded if p.suffix.lower() in [".webp", ".jpg", ".jpeg", ".png"]]
+    from downloader.utils import process_and_finalize_audio
 
-    if not audio_files:
-        print("✖ Download failed: Output audio file is missing")
+    ok, res, msg = process_and_finalize_audio(
+        downloaded_files=downloaded,
+        title=best["title"],
+        artist=best["channel"],
+        album="Single Search",
+        target_duration_sec=best.get("duration"),
+        cfg=cfg,
+    )
+    if not ok:
+        print(f"✖ Post-processing failed: {msg}")
         return False
-
-    audio = audio_files[0]
-    if audio.suffix.lower() == ".webm":
-        opus_path = audio.with_suffix(".opus")
-        r_code, _, _ = run_command(["ffmpeg", "-y", "-i", str(audio), "-c:a", "copy", str(opus_path)])
-        if r_code == 0 and opus_path.exists():
-            try:
-                audio.unlink()
-                audio = opus_path
-            except Exception:
-                pass
-
-    if thumb_files and cfg.get("square_crop_artwork", True):
-        crop_square_artwork(thumb_files[0])
-
-    cover_bytes = fetch_high_res_cover(best["title"], best["channel"]) if cfg.get("fetch_high_res_cover", True) else None
-    lyrics_text = None
-    if cfg.get("fetch_lyrics", True):
-        success, res, raw_lyrics = fetch_lyrics(best["title"], best["channel"], "", audio, duration_sec=best.get("duration"))
-        if success:
-            lyrics_text = raw_lyrics
-
-    apply_native_metadata(audio, best["title"], best["channel"], "Single Search", image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None)
-    if cfg.get("auto_sync_android_music", True):
-        synced, _ = sync_to_android_music(audio)
-        if synced:
-            try:
-                if audio.exists():
-                    audio.unlink()
-                for t in thumb_files:
-                    if t.exists():
-                        t.unlink()
-            except Exception:
-                pass
 
     print_banner(f"✓ SONG DOWNLOAD COMPLETE: {best['title']}")
     return True

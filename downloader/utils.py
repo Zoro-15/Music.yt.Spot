@@ -130,13 +130,13 @@ def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
 
 def normalize(text: str) -> str:
     """
-    Normalizes string by stripping diacritics/accents, lowercasing, converting
-    non-word characters to spaces, and stripping extra whitespace.
+    Normalizes string by lowercasing, converting non-word characters to spaces
+    (preserving Unicode word characters across languages), and stripping extra whitespace.
     """
     if not text:
         return ""
-    text = unicodedata.normalize("NFKD", str(text)).encode("ASCII", "ignore").decode("utf-8").lower()
-    text = re.sub(r"[^\w\s]", " ", text)
+    text = unicodedata.normalize("NFKC", str(text)).lower()
+    text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
@@ -338,3 +338,81 @@ def generate_m3u8_playlist(playlist_name: str, audio_files: List[Path]) -> Optio
     except Exception as e:
         print(f" ⚠ Could not create .m3u8 playlist file: {e}")
         return None
+
+
+def process_and_finalize_audio(
+    downloaded_files: List[Path],
+    title: str,
+    artist: str,
+    album: str = "",
+    target_duration_sec: Optional[int] = None,
+    cover_url: Optional[str] = None,
+    track_number: Optional[int] = None,
+    cfg: Optional[Dict[str, Any]] = None,
+) -> Tuple[bool, Optional[Path], str]:
+    """
+    Unified post-processor:
+    1. Converts .webm (Opus) containers to native .opus losslessly.
+    2. Crops 16:9 thumbnail into 1:1 square artwork.
+    3. Fetches high-res cover art & lyrics.
+    4. Applies native metadata (Mutagen / FFmpeg).
+    5. Syncs to Android system Music folder & cleans up.
+    """
+    if cfg is None:
+        try:
+            from downloader.config import load_config
+            cfg = load_config()
+        except Exception:
+            cfg = {}
+
+    audio_files = [p for p in downloaded_files if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]]
+    thumb_files = [p for p in downloaded_files if p.suffix.lower() in [".webp", ".jpg", ".jpeg", ".png"]]
+
+    if not audio_files:
+        return False, None, "Output audio file is missing"
+
+    audio = audio_files[0]
+
+    # Convert .webm (Opus) container to native .opus container losslessly (0 re-encoding)
+    if audio.suffix.lower() == ".webm":
+        opus_path = audio.with_suffix(".opus")
+        r_code, _, _ = run_command(["ffmpeg", "-y", "-i", str(audio), "-c:a", "copy", str(opus_path)])
+        if r_code == 0 and opus_path.exists():
+            try:
+                audio.unlink()
+                audio = opus_path
+            except Exception:
+                pass
+
+    from downloader.ffmpeg_tagger import apply_native_metadata, crop_square_artwork
+    from downloader.cover_art import fetch_high_res_cover
+    from downloader.lyrics import fetch_lyrics
+
+    if thumb_files and cfg.get("square_crop_artwork", True):
+        crop_square_artwork(thumb_files[0])
+
+    cover_bytes = fetch_high_res_cover(title, artist, preferred_url=cover_url) if cfg.get("fetch_high_res_cover", True) else None
+    lyrics_text = None
+    if cfg.get("fetch_lyrics", True):
+        success, res, raw_lyrics = fetch_lyrics(title, artist, album, audio, duration_sec=target_duration_sec)
+        if success:
+            lyrics_text = raw_lyrics
+            if isinstance(res, Path) and cfg.get("auto_sync_android_music", True):
+                sync_to_android_music(res)
+
+    apply_native_metadata(audio, title, artist, album, image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None, track_number=track_number)
+
+    if cfg.get("auto_sync_android_music", True):
+        synced, _ = sync_to_android_music(audio)
+        if synced:
+            try:
+                if audio.exists():
+                    audio.unlink()
+                for t in thumb_files:
+                    if t.exists():
+                        t.unlink()
+            except Exception:
+                pass
+
+    return True, audio, "Processed successfully"
+

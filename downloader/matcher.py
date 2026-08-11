@@ -30,10 +30,10 @@ def _save_search_cache(cache: Dict[str, Any]) -> None:
         pass
 
 
-def search_youtube_entries(query: str, count: int = SEARCH_COUNT) -> List[Dict[str, Any]]:
+def search_youtube_entries(query: str, count: int = SEARCH_COUNT, use_ytmusic: bool = False) -> List[Dict[str, Any]]:
     """Fetches YouTube search entries using yt-dlp Python API or subprocess CLI fallback."""
-    # Check cache first
-    cache_key = f"{query}__{count}"
+    prefix = "ytmusicsearch" if use_ytmusic else "ytsearch"
+    cache_key = f"{prefix}_{query}__{count}"
     with _search_cache_lock:
         cache = _load_search_cache()
         if cache_key in cache:
@@ -53,15 +53,19 @@ def search_youtube_entries(query: str, count: int = SEARCH_COUNT) -> List[Dict[s
             "ignoreerrors": True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            res = ydl.extract_info(f"ytsearch{count}:{query}", download=False)
+            res = ydl.extract_info(f"{prefix}{count}:{query}", download=False)
             if res and "entries" in res:
                 entries = [e for e in res["entries"] if e and isinstance(e, dict)]
     except Exception:
         entries = []
 
+    # Fallback to ytsearch if ytmusicsearch returned no entries
+    if not entries and use_ytmusic:
+        return search_youtube_entries(query, count=count, use_ytmusic=False)
+
     # 2. Subprocess CLI fallback if Python API failed or returned empty
     if not entries:
-        cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", f"ytsearch{count}:{query}"]
+        cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", f"{prefix}{count}:{query}"]
         code, stdout, _ = run_command(cmd)
         if code == 0 and stdout.strip():
             try:
@@ -227,7 +231,7 @@ def search_youtube(
     seen_urls: Set[str] = set()
 
     for query in queries:
-        entries = search_youtube_entries(query, count=count)
+        entries = search_youtube_entries(query, count=count, use_ytmusic=use_ytmusic)
         for entry in entries:
             if not entry:
                 continue

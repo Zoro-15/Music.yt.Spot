@@ -8,9 +8,15 @@ def test_normalize_basic():
 
 
 def test_normalize_diacritics():
-    assert normalize("Mötley Crüe") == "motley crue"
-    assert normalize("Señorita") == "senorita"
-    assert normalize("Beyoncé") == "beyonce"
+    assert normalize("Mötley Crüe") == "mötley crüe"
+    assert normalize("Señorita") == "señorita"
+    assert normalize("Beyoncé") == "beyoncé"
+
+
+def test_normalize_multilingual():
+    assert normalize("ਨਵਾਂ ਸੰਧੂ") == "ਨਵਾਂ ਸੰਧੂ"
+    assert normalize("अरिजीत सिंह") == "अरिजीत सिंह"
+    assert normalize("YOASOBI - 夜に駆ける") == "yoasobi 夜に駆ける"
 
 
 def test_words():

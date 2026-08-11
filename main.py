@@ -14,10 +14,91 @@ from downloader.utils import print_banner, clean_project_cache
 from downloader.config import load_config, save_config
 
 
+from downloader.config import load_config, save_config, update_config_key
+
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    console = Console()
+    RICH_MENU = True
+except ImportError:
+    Console = None
+    Panel = None
+    Table = None
+    console = None
+    RICH_MENU = False
+
+
+def settings_menu():
+    """Interactive Settings Manager for config.json."""
+    while True:
+        cfg = load_config()
+        print_banner("Settings Manager (config.json)")
+        print(f"  1. Parallel Download Workers  : {cfg.get('max_workers', 10)}")
+        print(f"  2. Minimum Match Score (0-100): {cfg.get('min_score', 70)}")
+        print(f"  3. YT Music Priority         : {'[Enabled]' if cfg.get('ytmusic_priority', True) else '[Disabled]'}")
+        print(f"  4. Fetch & Embed Lyrics       : {'[Enabled]' if cfg.get('fetch_lyrics', True) else '[Disabled]'}")
+        print(f"  5. Fetch HD Cover Art         : {'[Enabled]' if cfg.get('fetch_high_res_cover', True) else '[Disabled]'}")
+        print(f"  6. 1:1 Square Crop Artwork    : {'[Enabled]' if cfg.get('square_crop_artwork', True) else '[Disabled]'}")
+        print(f"  7. Auto-Sync to Android Music : {'[Enabled]' if cfg.get('auto_sync_android_music', True) else '[Disabled]'}")
+        print(f"  8. Audio Format               : {cfg.get('audio_format', 'best_native')}")
+        print("  9. Return to Main Menu")
+        print("-" * 50)
+
+        choice = input("Select setting to modify [1-9]: ").strip()
+        if choice == "1":
+            val = input("Enter worker count (1-16) [default 10]: ").strip()
+            if val.isdigit() and 1 <= int(val) <= 16:
+                update_config_key("max_workers", int(val))
+                print(f" ✓ Set max_workers to {val}")
+        elif choice == "2":
+            val = input("Enter minimum match score (50-95) [default 70]: ").strip()
+            if val.isdigit() and 50 <= int(val) <= 95:
+                update_config_key("min_score", int(val))
+                print(f" ✓ Set min_score to {val}")
+        elif choice == "3":
+            update_config_key("ytmusic_priority", not cfg.get("ytmusic_priority", True))
+            print(" ✓ Toggled YT Music Priority")
+        elif choice == "4":
+            cur = cfg.get("fetch_lyrics", True)
+            update_config_key("fetch_lyrics", not cur)
+            update_config_key("embed_lyrics", not cur)
+            print(" ✓ Toggled Lyrics Fetching & Embedding")
+        elif choice == "5":
+            update_config_key("fetch_high_res_cover", not cfg.get("fetch_high_res_cover", True))
+            print(" ✓ Toggled HD Cover Art Fetching")
+        elif choice == "6":
+            update_config_key("square_crop_artwork", not cfg.get("square_crop_artwork", True))
+            print(" ✓ Toggled Square Crop Artwork")
+        elif choice == "7":
+            update_config_key("auto_sync_android_music", not cfg.get("auto_sync_android_music", True))
+            print(" ✓ Toggled Android Music Sync")
+        elif choice == "8":
+            print("\n  a. best_native (Opus / AAC without lossy re-encoding)\n  b. m4a\n  c. opus")
+            fmt_c = input("Choose format [a/b/c]: ").strip().lower()
+            if fmt_c == "a":
+                update_config_key("audio_format", "best_native")
+            elif fmt_c == "b":
+                update_config_key("audio_format", "m4a")
+            elif fmt_c == "c":
+                update_config_key("audio_format", "opus")
+        elif choice == "9" or choice.lower() == "q":
+            break
+
+
 def interactive_menu():
     """Displays an interactive terminal menu for users running 'python main.py'."""
     while True:
-        print_banner("Termux Playlist Audio Downloader")
+        if RICH_MENU and console:
+            console.print(Panel.fit(
+                "[bold cyan]🎵 Termux Playlist Audio Downloader[/bold cyan]\n"
+                "[dim]High-Performance Multi-Threaded CLI Audio Tool[/dim]",
+                border_style="cyan"
+            ))
+        else:
+            print_banner("Termux Playlist Audio Downloader")
+
         print("  1. Spotify Playlist / Album / Track (Direct URL or Exportify JSON)")
         print("  2. Search & Download Song by Name")
         print("  3. Download from Universal Link (YouTube, YT Music, or Spotify)")
@@ -25,10 +106,11 @@ def interactive_menu():
         print("  5. Review Low-Confidence / Failed Tracks")
         print("  6. Audit & Fix Mismatched / Failed Tracks (Auto-clean & Re-download)")
         print("  7. Clean / Reset Cache, CSV & Logs")
-        print("  8. Exit")
+        print("  8. Manage Settings (config.json)")
+        print("  9. Exit")
         print("-" * 50)
 
-        choice = input("Select an option [1-8]: ").strip()
+        choice = input("Select an option [1-9]: ").strip()
 
         if choice == "1":
             url_or_json = input("\nEnter Spotify URL or press Enter to auto-discover local JSON: ").strip()
@@ -36,17 +118,17 @@ def interactive_menu():
                 start = input("\nStart downloading playlist tracks now? [Y/n]: ").strip()
                 if start.lower() != "n":
                     run_download()
-            break
+            input("\nPress Enter to return to menu...")
         elif choice == "2":
             query = input("\nEnter Song Name or Search Query: ").strip()
             if query:
                 search_and_download_song(query)
-            break
+            input("\nPress Enter to return to menu...")
         elif choice == "3":
             url = input("\nEnter YouTube / YT Music / Spotify URL: ").strip()
             if url:
                 download_from_link(url)
-            break
+            input("\nPress Enter to return to menu...")
         elif choice == "4":
             show_status()
             input("\nPress Enter to return to menu...")
@@ -66,12 +148,13 @@ def interactive_menu():
                 inc_out = input("Also clear all downloaded audio files in output/ folder? [y/N]: ").strip().lower() == "y"
                 clean_project_cache(include_output=inc_out)
             input("\nPress Enter to return to menu...")
-
-        elif choice == "8" or choice.lower() == "exit":
+        elif choice == "8":
+            settings_menu()
+        elif choice == "9" or choice.lower() in ["exit", "q"]:
             print("\nGoodbye!")
             break
         else:
-            print("\nInvalid choice. Please enter a number between 1 and 8.")
+            print("\nInvalid choice. Please enter a number between 1 and 9.")
 
 
 def main():

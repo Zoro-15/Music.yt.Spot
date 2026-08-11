@@ -80,28 +80,14 @@ def download_youtube_video(url: str) -> bool:
     code, stdout, stderr = run_command(cmd)
 
     if code == 0:
-        new_files = set(OUTPUT_DIR.glob("*.*")) - before_files
-        for f in new_files:
-            if f.suffix.lower() in [".webp", ".jpg", ".jpeg"] and cfg.get("square_crop_artwork", True):
-                crop_square_artwork(f)
-            elif f.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]:
-                target_f = f
-                if f.suffix.lower() == ".webm":
-                    opus_path = f.with_suffix(".opus")
-                    r_code, _, _ = run_command(["ffmpeg", "-y", "-i", str(f), "-c:a", "copy", str(opus_path)])
-                    if r_code == 0 and opus_path.exists():
-                        try:
-                            f.unlink()
-                            target_f = opus_path
-                        except Exception:
-                            pass
-                if cfg.get("auto_sync_android_music", True):
-                    synced, _ = sync_to_android_music(target_f)
-                    if synced and target_f.exists():
-                        try:
-                            target_f.unlink()
-                        except Exception:
-                            pass
+        new_files = list(set(OUTPUT_DIR.glob("*.*")) - before_files)
+        from downloader.utils import process_and_finalize_audio
+        process_and_finalize_audio(
+            downloaded_files=new_files,
+            title="Downloaded Track",
+            artist="YouTube Downloader",
+            cfg=cfg,
+        )
         print_banner("AUDIO DOWNLOAD COMPLETE")
         return True
     print(f"\nERROR: Download encountered issues: {stderr[-1000:] if stderr else 'Unknown failure'}")

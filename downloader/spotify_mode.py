@@ -144,9 +144,9 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
     code, stdout, stderr = run_command(cmd)
 
     if code != 0:
-        fallback_cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
+        # Smart Fallback Retry: Use alternate player client flags (ios,web) if bot check triggered
+        fallback_cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail", "--convert-thumbnails", "jpg", "--extractor-args", "youtube:player_client=ios,web"] + ["-o", output_template, best["url"]]
         code, stdout, stderr = run_command(fallback_cmd)
-
 
     if code != 0:
         err_reason = "Unknown error"
@@ -157,50 +157,20 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
         return "failed", err_reason
 
     downloaded = list(OUTPUT_DIR.glob(f"{filename}.*"))
-    audio_files = [p for p in downloaded if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]]
-    thumb_files = [p for p in downloaded if p.suffix.lower() in [".webp", ".jpg", ".jpeg", ".png"]]
+    from downloader.utils import process_and_finalize_audio
 
-    if not audio_files:
-        return "failed", "yt-dlp completed but output audio file is missing"
-
-    audio = audio_files[0]
-
-    # Convert .webm (Opus) container to native .opus audio container losslessly (0 re-encoding)
-    if audio.suffix.lower() == ".webm":
-        opus_path = audio.with_suffix(".opus")
-        remux_cmd = ["ffmpeg", "-y", "-i", str(audio), "-c:a", "copy", str(opus_path)]
-        r_code, _, _ = run_command(remux_cmd)
-        if r_code == 0 and opus_path.exists():
-            try:
-                audio.unlink()
-                audio = opus_path
-            except Exception:
-                pass
-
-    if thumb_files and cfg.get("square_crop_artwork", True):
-        crop_square_artwork(thumb_files[0])
-
-    cover_bytes = fetch_high_res_cover(title, artists, preferred_url=cover_url) if cfg.get("fetch_high_res_cover", True) else None
-    lyrics_text = None
-    if cfg.get("fetch_lyrics", True):
-        success, res, raw_lyrics = fetch_lyrics(title, artists, album, audio, duration_sec=target_duration_sec)
-        if success:
-            lyrics_text = raw_lyrics
-            if isinstance(res, Path) and cfg.get("auto_sync_android_music", True):
-                sync_to_android_music(res)
-
-    apply_native_metadata(audio, title, artists, album, image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None, track_number=index)
-    if cfg.get("auto_sync_android_music", True):
-        synced, _ = sync_to_android_music(audio)
-        if synced:
-            try:
-                if audio.exists():
-                    audio.unlink()
-                for t in thumb_files:
-                    if t.exists():
-                        t.unlink()
-            except Exception:
-                pass
+    ok, res, msg = process_and_finalize_audio(
+        downloaded_files=downloaded,
+        title=title,
+        artist=artists,
+        album=album,
+        target_duration_sec=target_duration_sec,
+        cover_url=cover_url,
+        track_number=index,
+        cfg=cfg,
+    )
+    if not ok:
+        return "failed", msg
 
     return "success", best
 
