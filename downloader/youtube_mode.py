@@ -95,10 +95,16 @@ def download_youtube_video(url: str) -> bool:
                         except Exception:
                             pass
                 if cfg.get("auto_sync_android_music", True):
-                    sync_to_android_music(target_f)
+                    synced, _ = sync_to_android_music(target_f)
+                    if synced and target_f.exists():
+                        try:
+                            target_f.unlink()
+                        except Exception:
+                            pass
         print_banner("AUDIO DOWNLOAD COMPLETE")
         return True
     print(f"\nERROR: Download encountered issues: {stderr[-1000:] if stderr else 'Unknown failure'}")
     return False
+
 
 

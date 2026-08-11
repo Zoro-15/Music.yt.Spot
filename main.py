@@ -53,8 +53,10 @@ def interactive_menu():
         elif choice == "6":
             confirm = input("Reset CSV, progress logs, and cache? [y/N]: ").strip().lower()
             if confirm == "y":
-                clean_project_cache(include_output=False)
+                inc_out = input("Also clear all downloaded audio files in output/ folder? [y/N]: ").strip().lower() == "y"
+                clean_project_cache(include_output=inc_out)
             input("\nPress Enter to return to menu...")
+
         elif choice == "7" or choice.lower() == "exit":
             print("\nGoodbye!")
             break

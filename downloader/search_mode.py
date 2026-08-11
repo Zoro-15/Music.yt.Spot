@@ -73,9 +73,19 @@ def search_and_download_song(query: str) -> bool:
 
     apply_native_metadata(audio, best["title"], best["channel"], "Single Search", image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None)
     if cfg.get("auto_sync_android_music", True):
-        sync_to_android_music(audio)
+        synced, _ = sync_to_android_music(audio)
+        if synced:
+            try:
+                if audio.exists():
+                    audio.unlink()
+                for t in thumb_files:
+                    if t.exists():
+                        t.unlink()
+            except Exception:
+                pass
 
     print_banner(f"✓ SONG DOWNLOAD COMPLETE: {best['title']}")
     return True
+
 
 

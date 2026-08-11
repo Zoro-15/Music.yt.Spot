@@ -111,10 +111,16 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
     filename_with_idx = f"{index:03d} - {safe_title}"
     music_dir = find_android_music_dir()
 
-    # Strictly check if this specific track file (indexed or exact title in output dir) exists
+    # Strictly check if this specific track file exists in OUTPUT_DIR
     for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
-        if (OUTPUT_DIR / f"{filename_with_idx}{ext}").exists() or (OUTPUT_DIR / f"{safe_title}{ext}").exists():
+        existing = OUTPUT_DIR / f"{filename_with_idx}{ext}"
+        if not existing.exists():
+            existing = OUTPUT_DIR / f"{safe_title}{ext}"
+        if existing.exists() and existing.is_file() and existing.stat().st_size > 1000:
+            if cfg.get("auto_sync_android_music", True):
+                sync_to_android_music(existing)
             return "success", {"title": title, "channel": "Local Disk", "score": 100}
+
 
 
 
@@ -176,9 +182,19 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
 
     apply_native_metadata(audio, title, artists, album, image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None, track_number=index)
     if cfg.get("auto_sync_android_music", True):
-        sync_to_android_music(audio)
+        synced, _ = sync_to_android_music(audio)
+        if synced:
+            try:
+                if audio.exists():
+                    audio.unlink()
+                for t in thumb_files:
+                    if t.exists():
+                        t.unlink()
+            except Exception:
+                pass
 
     return "success", best
+
 
 
 
