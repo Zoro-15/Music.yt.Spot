@@ -18,6 +18,7 @@ A high-performance, multi-threaded Termux / Android CLI tool for downloading aud
 
 ## 🚀 Quick Start (Termux)
 
+### 📥 First-Time Installation
 ```bash
 # 1. Install prerequisites & setup storage
 pkg update && pkg upgrade -y
@@ -31,6 +32,11 @@ python -m pip install -U -r requirements.txt mutagen yt-dlp rich
 
 # 3. Launch interactive menu
 python main.py
+```
+
+### ⚡ Launch in New Termux Session (Already Installed)
+```bash
+cd ~/Music.yt.Spot && python main.py
 ```
 
 > **Updating Existing App**: Run `cd ~/Music.yt.Spot && git pull && python -m pip install -U -r requirements.txt` anytime to fetch the latest updates!
