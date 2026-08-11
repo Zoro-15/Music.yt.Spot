@@ -15,8 +15,18 @@ def load_progress() -> Dict[str, Dict[str, Any]]:
         return {}
 
 
-def save_progress(progress: Dict[str, Dict[str, Any]]) -> None:
-    """Saves progress atomically to data/progress.json."""
+_last_save_time = 0.0
+
+
+def save_progress(progress: Dict[str, Dict[str, Any]], force: bool = False) -> None:
+    """Saves progress atomically to data/progress.json with time throttling."""
+    global _last_save_time
+    import time
+    now = time.time()
+    if not force and (now - _last_save_time < 0.5):
+        return
+    _last_save_time = now
+
     tmp = PROGRESS_FILE.with_suffix(".tmp")
     try:
         with open(tmp, "w", encoding="utf-8") as f:
@@ -53,6 +63,18 @@ def show_status() -> None:
     review = sum(1 for x in progress.values() if x.get("status") == "review")
     processed = success + failed + review
 
-    print(f"\nStatus Report\n{'='*35}\n Total tracks : {total}\n Processed    : {processed} (Success: {success}, Failed: {failed}, Review: {review})\n Remaining    : {max(0, total - processed)}\n{'='*35}\n")
+    print(f"\nStatus Report\n{'='*45}\n Total tracks : {total}\n Processed    : {processed} (Success: {success}, Failed: {failed}, Review: {review})\n Remaining    : {max(0, total - processed)}\n{'='*45}")
+
+    if failed > 0:
+        print("\n  Failure Reasons Breakdown:")
+        reasons_summary: Dict[str, int] = {}
+        for item in progress.values():
+            if item.get("status") == "failed":
+                r = item.get("reason", "Unknown failure")
+                reasons_summary[r] = reasons_summary.get(r, 0) + 1
+        for r_text, count in reasons_summary.items():
+            print(f"   • {count} track(s): {r_text}")
+        print("  👉 Check data/failed.txt for full details.")
+    print()
 
 

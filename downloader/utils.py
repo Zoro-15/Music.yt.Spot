@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import unicodedata
 from pathlib import Path
 from typing import Optional, List, Tuple, Set, Dict, Any
 
@@ -129,13 +130,13 @@ def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
 
 def normalize(text: str) -> str:
     """
-    Normalizes string by lowercasing, converting non-word characters to spaces,
-    and stripping extra whitespace.
+    Normalizes string by stripping diacritics/accents, lowercasing, converting
+    non-word characters to spaces, and stripping extra whitespace.
     """
     if not text:
         return ""
-    text = text.lower()
-    text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
+    text = unicodedata.normalize("NFKD", str(text)).encode("ASCII", "ignore").decode("utf-8").lower()
+    text = re.sub(r"[^\w\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
@@ -175,6 +176,34 @@ def print_banner(text: str) -> None:
 # ============================================================
 # ANDROID MUSIC SYSTEM INTEGRATION
 # ============================================================
+
+def acquire_termux_wake_lock() -> bool:
+    """Acquires Termux wake lock to keep CPU active during background downloads."""
+    try:
+        code, _, _ = run_command(["termux-wake-lock"])
+        return code == 0
+    except Exception:
+        return False
+
+
+def release_termux_wake_lock() -> bool:
+    """Releases Termux wake lock."""
+    try:
+        code, _, _ = run_command(["termux-wake-unlock"])
+        return code == 0
+    except Exception:
+        return False
+
+
+def send_termux_notification(title: str, content: str) -> bool:
+    """Displays notification in Android status bar via Termux API."""
+    try:
+        cmd = ["termux-notification", "--title", title, "--content", content]
+        code, _, _ = run_command(cmd)
+        return code == 0
+    except Exception:
+        return False
+
 
 def find_android_music_dir() -> Optional[Path]:
     """Returns candidate Android system Music folder path if available."""

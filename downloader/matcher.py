@@ -1,10 +1,82 @@
 import json
+import threading
 from difflib import SequenceMatcher
 from typing import List, Dict, Tuple, Set, Any, Optional
-from downloader.utils import normalize, words, run_command
+from downloader.utils import DATA_DIR, normalize, words, run_command
 
 SEARCH_COUNT = 5
 MIN_SCORE = 70
+SEARCH_CACHE_FILE = DATA_DIR / "search_cache.json"
+_search_cache_lock = threading.Lock()
+
+
+def _load_search_cache() -> Dict[str, Any]:
+    if not SEARCH_CACHE_FILE.exists():
+        return {}
+    try:
+        with open(SEARCH_CACHE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_search_cache(cache: Dict[str, Any]) -> None:
+    try:
+        tmp = SEARCH_CACHE_FILE.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cache, f, indent=2, ensure_ascii=False)
+        tmp.replace(SEARCH_CACHE_FILE)
+    except Exception:
+        pass
+
+
+def search_youtube_entries(query: str, count: int = SEARCH_COUNT) -> List[Dict[str, Any]]:
+    """Fetches YouTube search entries using yt-dlp Python API or subprocess CLI fallback."""
+    # Check cache first
+    cache_key = f"{query}__{count}"
+    with _search_cache_lock:
+        cache = _load_search_cache()
+        if cache_key in cache:
+            return cache[cache_key]
+
+    entries: List[Dict[str, Any]] = []
+
+    # 1. Try native yt_dlp Python API
+    try:
+        import yt_dlp
+
+        ydl_opts = {
+            "extract_flat": True,
+            "skip_download": True,
+            "quiet": True,
+            "no_warnings": True,
+            "ignoreerrors": True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            res = ydl.extract_info(f"ytsearch{count}:{query}", download=False)
+            if res and "entries" in res:
+                entries = [e for e in res["entries"] if e and isinstance(e, dict)]
+    except Exception:
+        entries = []
+
+    # 2. Subprocess CLI fallback if Python API failed or returned empty
+    if not entries:
+        cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", f"ytsearch{count}:{query}"]
+        code, stdout, _ = run_command(cmd)
+        if code == 0 and stdout.strip():
+            try:
+                entries = (json.loads(stdout) or {}).get("entries") or []
+            except Exception:
+                entries = []
+
+    # Store in cache
+    if entries:
+        with _search_cache_lock:
+            c = _load_search_cache()
+            c[cache_key] = entries
+            _save_search_cache(c)
+
+    return entries
 
 
 def similarity(title: str, candidate: str) -> float:
@@ -124,7 +196,7 @@ def search_youtube(
     use_ytmusic: bool = True,
     target_duration_sec: Optional[int] = None,
 ) -> Tuple[List[Dict[str, Any]], str]:
-    """Queries YouTube using fast 1-pass search strategy to minimize subprocess overhead."""
+    """Queries YouTube using fast 1-pass search strategy with Python API & cache support."""
     primary_query = f"{artists} - {title} Topic" if artists else f"{title} Official Audio"
     fallback_query = f"{artists} {title}" if artists else title
 
@@ -132,16 +204,7 @@ def search_youtube(
     seen_urls: Set[str] = set()
 
     for query in [primary_query, fallback_query]:
-        cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", f"ytsearch{count}:{query}"]
-        code, stdout, _ = run_command(cmd)
-        if code != 0 or not stdout.strip():
-            continue
-
-        try:
-            entries = (json.loads(stdout) or {}).get("entries") or []
-        except Exception:
-            continue
-
+        entries = search_youtube_entries(query, count=count)
         for entry in entries:
             if not entry:
                 continue

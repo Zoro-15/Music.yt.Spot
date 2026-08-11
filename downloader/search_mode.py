@@ -11,6 +11,8 @@ from downloader.utils import (
     sync_to_android_music,
     get_ytdlp_auth_args,
     get_audio_quality_args,
+    acquire_termux_wake_lock,
+    release_termux_wake_lock,
 )
 
 
@@ -20,6 +22,17 @@ def search_and_download_song(query: str) -> bool:
         print("ERROR: Please provide a song name or search query.")
         return False
 
+    if load_config().get("termux_wake_lock", True):
+        acquire_termux_wake_lock()
+
+    try:
+        return _search_and_download_song_impl(query)
+    finally:
+        if load_config().get("termux_wake_lock", True):
+            release_termux_wake_lock()
+
+
+def _search_and_download_song_impl(query: str) -> bool:
     query = query.strip()
     print_banner(f"Searching Song: '{query}'")
     cfg = load_config()
@@ -68,7 +81,7 @@ def search_and_download_song(query: str) -> bool:
     cover_bytes = fetch_high_res_cover(best["title"], best["channel"]) if cfg.get("fetch_high_res_cover", True) else None
     lyrics_text = None
     if cfg.get("fetch_lyrics", True):
-        success, res, raw_lyrics = fetch_lyrics(best["title"], best["channel"], "", audio)
+        success, res, raw_lyrics = fetch_lyrics(best["title"], best["channel"], "", audio, duration_sec=best.get("duration"))
         if success:
             lyrics_text = raw_lyrics
 

@@ -4,12 +4,14 @@ Unified CLI Entrypoint for Termux Playlist Audio Downloader.
 """
 
 import sys
+import argparse
 from downloader.spotify_mode import prepare_csv, run_download
 from downloader.search_mode import search_and_download_song
 from downloader.youtube_mode import download_from_link
 from downloader.progress import show_status
 from downloader.review_mode import run_review_mode
 from downloader.utils import print_banner, clean_project_cache
+from downloader.config import load_config, save_config
 
 
 def interactive_menu():
@@ -64,70 +66,65 @@ def interactive_menu():
             print("\nInvalid choice. Please enter a number between 1 and 7.")
 
 
-def print_usage():
-    print("""
-Termux Playlist Audio Downloader — Usage Guide:
-
-Interactive Mode:
-  python main.py
-
-Spotify URL / JSON Mode (Parallel Download Engine):
-  python main.py spotify [url_or_json_path]
-
-Search Song by Name:
-  python main.py search "Song Name"
-
-Universal Link Downloader (YouTube, YT Music, or Spotify):
-  python main.py link "URL"
-
-Interactive Review Mode:
-  python main.py review
-
-Clean Cache & Reset Data:
-  python main.py clean
-
-Status Report:
-  python main.py status
-""")
-
-
 def main():
     if len(sys.argv) == 1:
         interactive_menu()
         return
 
-    cmd = sys.argv[1].lower()
+    parser = argparse.ArgumentParser(
+        description="Termux Playlist Audio Downloader — High performance CLI audio tool.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
 
-    if cmd in ["-h", "--help", "help"]:
-        print_usage()
-    elif cmd in ["spotify", "sp"]:
-        path_or_url = sys.argv[2] if len(sys.argv) > 2 else None
-        if prepare_csv(path_or_url):
+    subparsers = parser.add_subparsers(dest="command", help="Available Commands")
+
+    # spotify subcommand
+    sp_parser = subparsers.add_parser("spotify", aliases=["sp"], help="Download Spotify playlist / album / track")
+    sp_parser.add_argument("source", nargs="?", default=None, help="Spotify URL or path to Exportify JSON file")
+    sp_parser.add_argument("-w", "--workers", type=int, default=None, help="Override parallel download thread count")
+
+    # search subcommand
+    search_parser = subparsers.add_parser("search", help="Search song by name and download audio")
+    search_parser.add_argument("query", nargs="+", help="Song title or artist query")
+
+    # link subcommand
+    link_parser = subparsers.add_parser("link", aliases=["youtube", "video", "url"], help="Download from YouTube / YT Music / Spotify URL")
+    link_parser.add_argument("url", help="Media URL to download")
+
+    # review subcommand
+    subparsers.add_parser("review", help="Interactively review low-confidence track matches")
+
+    # clean subcommand
+    clean_parser = subparsers.add_parser("clean", help="Clean cache, logs, and temporary files")
+    clean_parser.add_argument("-a", "--all", action="store_true", help="Also clear output directory")
+
+    # status subcommand
+    subparsers.add_parser("status", help="Display download progress status report")
+
+    args = parser.parse_args()
+
+    cmd = args.command.lower() if args.command else None
+
+    if cmd in ["spotify", "sp"]:
+        if getattr(args, "workers", None):
+            cfg = load_config()
+            cfg["max_workers"] = args.workers
+            save_config(cfg)
+        if prepare_csv(args.source):
             run_download()
     elif cmd == "search":
-        if len(sys.argv) < 3:
-            print("ERROR: Please provide a song name or search query.")
-            print("Example: python main.py search \"No Handouts Amantej Hundal\"")
-            sys.exit(1)
-        query = " ".join(sys.argv[2:])
-        search_and_download_song(query)
+        q = " ".join(args.query) if isinstance(args.query, list) else args.query
+        search_and_download_song(q)
     elif cmd in ["link", "youtube", "video", "url"]:
-        if len(sys.argv) < 3:
-            print("ERROR: Please provide a valid YouTube, YT Music, or Spotify URL.")
-            print("Example: python main.py link \"https://open.spotify.com/playlist/...\"")
-            sys.exit(1)
-        url = sys.argv[2]
-        download_from_link(url)
+        download_from_link(args.url)
     elif cmd == "review":
         run_review_mode()
     elif cmd == "clean":
-        clean_project_cache(include_output="--all" in sys.argv or "-a" in sys.argv)
+        clean_project_cache(include_output=args.all)
     elif cmd == "status":
         show_status()
     else:
-        print(f"Unknown command: '{cmd}'")
-        print_usage()
-        sys.exit(1)
+        interactive_menu()
 
 
 if __name__ == "__main__":

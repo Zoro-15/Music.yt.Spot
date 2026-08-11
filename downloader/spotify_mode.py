@@ -25,6 +25,9 @@ from downloader.utils import (
     get_ytdlp_auth_args,
     get_audio_quality_args,
     generate_m3u8_playlist,
+    acquire_termux_wake_lock,
+    release_termux_wake_lock,
+    send_termux_notification,
 )
 
 # Rich library optional import for thread-safe UI
@@ -146,7 +149,12 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
 
 
     if code != 0:
-        return "failed", stderr.strip().splitlines()[-1] if stderr and stderr.strip() else "Unknown error"
+        err_reason = "Unknown error"
+        if stderr and stderr.strip():
+            lines = [l.strip() for l in stderr.strip().splitlines() if l.strip()]
+            err_lines = [l for l in lines if "ERROR:" in l or "HTTP Error" in l or "WARNING:" in l]
+            err_reason = err_lines[-1] if err_lines else lines[-1]
+        return "failed", err_reason
 
     downloaded = list(OUTPUT_DIR.glob(f"{filename}.*"))
     audio_files = [p for p in downloaded if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]]
@@ -175,7 +183,7 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
     cover_bytes = fetch_high_res_cover(title, artists, preferred_url=cover_url) if cfg.get("fetch_high_res_cover", True) else None
     lyrics_text = None
     if cfg.get("fetch_lyrics", True):
-        success, res, raw_lyrics = fetch_lyrics(title, artists, album, audio)
+        success, res, raw_lyrics = fetch_lyrics(title, artists, album, audio, duration_sec=target_duration_sec)
         if success:
             lyrics_text = raw_lyrics
             if isinstance(res, Path) and cfg.get("auto_sync_android_music", True):
@@ -206,11 +214,24 @@ def download_single_spotify_track(row: Dict[str, str], index: int) -> Tuple[str,
 
 def run_download() -> None:
     """Main multi-threaded download runner for Spotify playlist tracks."""
+    cfg = load_config()
+    use_wake_lock = cfg.get("termux_wake_lock", True)
+
+    if use_wake_lock:
+        acquire_termux_wake_lock()
+
+    try:
+        _run_download_impl(cfg)
+    finally:
+        if use_wake_lock:
+            release_termux_wake_lock()
+
+
+def _run_download_impl(cfg: Dict[str, Any]) -> None:
     if not TRACKS_CSV.exists() and not prepare_csv():
         print("Aborting download.")
         return
 
-    cfg = load_config()
     max_workers = cfg.get("max_workers", 10)
 
     tracks = []
@@ -239,14 +260,21 @@ def run_download() -> None:
                 status, result = process_single_track(row, idx, cfg)
                 with progress_lock:
                     key = str(idx)
-                    progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": status}
-                    if isinstance(result, dict):
-                        progress[key].update({"youtube_title": result.get("title"), "youtube_channel": result.get("channel"), "youtube_url": result.get("url"), "score": result.get("score")})
-                    save_progress(progress)
-                    if status == "failed":
-                        log_failed(idx, row["title"], row["artist"], str(result))
+                    if status == "success":
+                        progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "success"}
+                        if isinstance(result, dict):
+                            progress[key].update({"youtube_title": result.get("title"), "youtube_channel": result.get("channel"), "youtube_url": result.get("url"), "score": result.get("score")})
+                    elif status == "failed":
+                        reason_str = str(result)
+                        progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "failed", "reason": reason_str}
+                        log_failed(idx, row["title"], row["artist"], reason_str)
+                        prg.console.print(f"[bold red]✖ [{idx:03d}] FAILED:[/bold red] '{row['title']}' by {row['artist']} — [red]{reason_str}[/red]")
                     elif status == "review" and isinstance(result, dict):
+                        progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "review", "youtube_title": result.get("title"), "youtube_channel": result.get("channel"), "youtube_url": result.get("url"), "score": result.get("score")}
                         log_review(idx, row["title"], row["artist"], result.get("score"), result.get("title"), result.get("url"))
+                        prg.console.print(f"[bold yellow]⚠ [{idx:03d}] REVIEW (Score {result.get('score')}):[/bold yellow] '{row['title']}' — Matched: '{result.get('title')}'")
+
+                    save_progress(progress)
                     prg.advance(task)
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -254,7 +282,7 @@ def run_download() -> None:
                 for f in as_completed(futures):
                     try:
                         f.result()
-                    except Exception as e:
+                    except Exception:
                         pass
     else:
         def worker_task(row: Dict[str, str]) -> None:
@@ -262,15 +290,22 @@ def run_download() -> None:
             status, result = process_single_track(row, idx, cfg)
             with progress_lock:
                 key = str(idx)
-                progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": status}
-                if isinstance(result, dict):
-                    progress[key].update({"youtube_title": result.get("title"), "youtube_channel": result.get("channel"), "youtube_url": result.get("url"), "score": result.get("score")})
-                save_progress(progress)
-                if status == "failed":
-                    log_failed(idx, row["title"], row["artist"], str(result))
+                if status == "success":
+                    progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "success"}
+                    if isinstance(result, dict):
+                        progress[key].update({"youtube_title": result.get("title"), "youtube_channel": result.get("channel"), "youtube_url": result.get("url"), "score": result.get("score")})
+                    print(f"[{idx:03d}] SUCCESS: '{row['title']}'")
+                elif status == "failed":
+                    reason_str = str(result)
+                    progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "failed", "reason": reason_str}
+                    log_failed(idx, row["title"], row["artist"], reason_str)
+                    print(f"[{idx:03d}] FAILED: '{row['title']}' — Reason: {reason_str}")
                 elif status == "review" and isinstance(result, dict):
+                    progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "review", "youtube_title": result.get("title"), "youtube_channel": result.get("channel"), "youtube_url": result.get("url"), "score": result.get("score")}
                     log_review(idx, row["title"], row["artist"], result.get("score"), result.get("title"), result.get("url"))
-                print(f"[{idx:03d}] {status.upper()}: '{row['title']}'")
+                    print(f"[{idx:03d}] REVIEW (Score {result.get('score')}): '{row['title']}' — Matched: '{result.get('title')}'")
+
+                save_progress(progress)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(worker_task, r) for r in pending]
@@ -284,4 +319,27 @@ def run_download() -> None:
     all_audios = list(OUTPUT_DIR.glob("*.*"))
     generate_m3u8_playlist("Spotify Playlist", all_audios)
     print_banner("PLAYLIST PROCESSING COMPLETE")
+
+    # Post-download failure summary report
+    failed_items = {k: v for k, v in progress.items() if v.get("status") == "failed"}
+    review_items = {k: v for k, v in progress.items() if v.get("status") == "review"}
+    if failed_items or review_items:
+        print("\n" + "=" * 65)
+        print(f" DOWNLOAD SUMMARY: {len(pending) - len(failed_items) - len(review_items)} Succeeded | {len(review_items)} Low Confidence | {len(failed_items)} Failed")
+        print("=" * 65)
+
+        if failed_items:
+            print("\n  Failure Reasons Breakdown:")
+            reasons_summary: Dict[str, int] = {}
+            for item in failed_items.values():
+                r = item.get("reason", "Unknown failure")
+                reasons_summary[r] = reasons_summary.get(r, 0) + 1
+            for r_text, count in reasons_summary.items():
+                print(f"   • {count} track(s): {r_text}")
+            print("\n  👉 Full failure details saved to: data/failed.txt")
+        if review_items:
+            print("  👉 Low-confidence tracks saved to: data/review.txt (run 'python main.py review')")
+
+    if cfg.get("termux_notifications", True):
+        send_termux_notification("Music.yt.Spot", f"Playlist download finished! ({len(pending) - len(failed_items)} succeeded, {len(failed_items)} failed)")
 

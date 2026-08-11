@@ -15,7 +15,7 @@ def clean_artist_name(artist: str) -> str:
 
 
 def fetch_lyrics(
-    title: str, artist: str, album: str, output_audio_path: Path
+    title: str, artist: str, album: str, output_audio_path: Path, duration_sec: Optional[int] = None
 ) -> Tuple[bool, Union[Path, str], Optional[str]]:
     """Queries LRCLIB REST API for synchronized (.lrc) or plain lyrics."""
     if not title or not output_audio_path:
@@ -24,10 +24,15 @@ def fetch_lyrics(
     primary_artist = clean_artist_name(artist)
     clean_title = re.sub(r"\(feat\.[^\)]+\)", "", title, flags=re.IGNORECASE).strip()
 
-    for url in [
-        f"https://lrclib.net/api/get?track_name={urllib.parse.quote(clean_title)}&artist_name={urllib.parse.quote(primary_artist)}",
-        f"https://lrclib.net/api/search?q={urllib.parse.quote(f'{clean_title} {primary_artist}')}",
-    ]:
+    urls = []
+    if duration_sec and duration_sec > 0:
+        urls.append(
+            f"https://lrclib.net/api/get?track_name={urllib.parse.quote(clean_title)}&artist_name={urllib.parse.quote(primary_artist)}&duration={duration_sec}"
+        )
+    urls.append(f"https://lrclib.net/api/get?track_name={urllib.parse.quote(clean_title)}&artist_name={urllib.parse.quote(primary_artist)}")
+    urls.append(f"https://lrclib.net/api/search?q={urllib.parse.quote(f'{clean_title} {primary_artist}')}")
+
+    for url in urls:
         try:
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=8) as resp:
