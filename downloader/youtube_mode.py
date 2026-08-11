@@ -7,126 +7,76 @@ from downloader.utils import (
     print_banner,
     sync_to_android_music,
     get_ytdlp_auth_args,
+    get_audio_quality_args,
+    generate_m3u8_playlist,
 )
 
 
 def download_from_link(url: str) -> bool:
-    """
-    Universal link downloader. Handles:
-    - YouTube Music playlists & albums (music.youtube.com/playlist?list=...)
-    - Standard YouTube playlists (youtube.com/playlist?list=...)
-    - YouTube Music single tracks (music.youtube.com/watch?v=...)
-    - Standard YouTube videos & music videos (youtube.com/watch?v=...)
-    """
+    """Universal link downloader for Spotify, YouTube, and YT Music."""
     if not url or not url.strip():
         print("ERROR: Please provide a valid URL.")
         return False
-
     url = url.strip()
-    is_playlist = "list=" in url or "/playlist" in url or "/album" in url
+    if "spotify.com" in url or "spotify:" in url:
+        from downloader.spotify_mode import prepare_csv, run_download
+        print_banner("Spotify Direct URL Downloader Mode")
+        if prepare_csv(url):
+            run_download()
+            return True
+        return False
 
-    if is_playlist:
-        return download_youtube_playlist(url)
-    else:
-        return download_youtube_video(url)
+    return download_youtube_playlist(url) if ("list=" in url or "/playlist" in url or "/album" in url) else download_youtube_video(url)
 
 
 def download_youtube_playlist(url: str) -> bool:
-    """
-    Downloads a complete YouTube or YT Music playlist/album directly using yt-dlp
-    with native audio preservation, archive tracking, thumbnail embedding, and index ordering.
-    """
+    """Downloads a complete YouTube or YT Music playlist/album directly using yt-dlp."""
     cfg = load_config()
     print_banner("Playlist / Album Downloader Mode")
-    print(f" Target URL       : {url}")
-    print(f" Output Directory : {OUTPUT_DIR}\n")
-
     archive_file = DATA_DIR / "downloaded_archive.txt"
     output_template = str(OUTPUT_DIR / "%(playlist_index)03d - %(title)s.%(ext)s")
+    before_files = set(OUTPUT_DIR.glob("*.*"))
 
-    cmd = [
-        "yt-dlp",
-        "--yes-playlist",
-        "--download-archive", str(archive_file),
-        "--retries", "5",
-        "--fragment-retries", "5",
-        "--retry-sleep", "2",
-        "--socket-timeout", "30",
-        "--continue",
-        # Native audio priority: M4A/AAC > WebM/Opus > best audio
-        "-f", "ba[ext=m4a]/ba[ext=webm]/ba",
-        "--add-metadata",
-        "--embed-thumbnail",
-        "--write-thumbnail",
-    ] + get_ytdlp_auth_args() + [
-        "-o", output_template,
-        url,
-    ]
-
-    print("Executing yt-dlp playlist/album download...")
+    cmd = ["yt-dlp", "--yes-playlist", "--download-archive", str(archive_file), "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--add-metadata", "--embed-thumbnail", "--write-thumbnail"] + get_ytdlp_auth_args() + ["-o", output_template, url]
     code, stdout, stderr = run_command(cmd)
 
     if code == 0:
-        # Crop downloaded artwork & sync to Android Music
-        for img in OUTPUT_DIR.glob("*.*"):
-            if img.suffix.lower() in [".webp", ".jpg", ".jpeg"] and cfg.get("square_crop_artwork", True):
-                crop_square_artwork(img)
-        for audio in OUTPUT_DIR.glob("*.*"):
-            if audio.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac"] and cfg.get("auto_sync_android_music", True):
-                sync_to_android_music(audio)
+        new_files = set(OUTPUT_DIR.glob("*.*")) - before_files
+        audio_files = []
+        for f in new_files:
+            if f.suffix.lower() in [".webp", ".jpg", ".jpeg"] and cfg.get("square_crop_artwork", True):
+                crop_square_artwork(f)
+            elif f.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]:
+                audio_files.append(f)
+                if cfg.get("auto_sync_android_music", True):
+                    sync_to_android_music(f)
 
+        generate_m3u8_playlist("YouTube Playlist", list(OUTPUT_DIR.glob("*.*")))
         print_banner("PLAYLIST / ALBUM DOWNLOAD COMPLETE")
         return True
-    else:
-        print("\nERROR: Download encountered issues:")
-        print(stderr[-2000:] if stderr else "Unknown download failure")
-        return False
+    print(f"\nERROR: Download encountered issues: {stderr[-1000:] if stderr else 'Unknown failure'}")
+    return False
 
 
 def download_youtube_video(url: str) -> bool:
-    """
-    Downloads a single YouTube or YT Music video audio file natively with metadata and thumbnail.
-    """
+    """Downloads a single YouTube or YT Music video audio file natively."""
     cfg = load_config()
     print_banner("Single Audio / Music Video Downloader Mode")
-    print(f" Target URL       : {url}")
-    print(f" Output Directory : {OUTPUT_DIR}\n")
-
     output_template = str(OUTPUT_DIR / "%(title)s.%(ext)s")
+    before_files = set(OUTPUT_DIR.glob("*.*"))
 
-    cmd = [
-        "yt-dlp",
-        "--no-playlist",
-        "--retries", "5",
-        "--fragment-retries", "5",
-        "--retry-sleep", "2",
-        "--socket-timeout", "30",
-        "--continue",
-        # Native audio priority: M4A/AAC > WebM/Opus > best audio
-        "-f", "ba[ext=m4a]/ba[ext=webm]/ba",
-        "--add-metadata",
-        "--embed-thumbnail",
-        "--write-thumbnail",
-    ] + get_ytdlp_auth_args() + [
-        "-o", output_template,
-        url,
-    ]
-
-    print("Executing yt-dlp download...")
+    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--add-metadata", "--embed-thumbnail", "--write-thumbnail"] + get_ytdlp_auth_args() + ["-o", output_template, url]
     code, stdout, stderr = run_command(cmd)
 
     if code == 0:
-        for img in OUTPUT_DIR.glob("*.*"):
-            if img.suffix.lower() in [".webp", ".jpg", ".jpeg"] and cfg.get("square_crop_artwork", True):
-                crop_square_artwork(img)
-        for audio in OUTPUT_DIR.glob("*.*"):
-            if audio.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac"] and cfg.get("auto_sync_android_music", True):
-                sync_to_android_music(audio)
-
+        new_files = set(OUTPUT_DIR.glob("*.*")) - before_files
+        for f in new_files:
+            if f.suffix.lower() in [".webp", ".jpg", ".jpeg"] and cfg.get("square_crop_artwork", True):
+                crop_square_artwork(f)
+            elif f.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"] and cfg.get("auto_sync_android_music", True):
+                sync_to_android_music(f)
         print_banner("AUDIO DOWNLOAD COMPLETE")
         return True
-    else:
-        print("\nERROR: Download encountered issues:")
-        print(stderr[-2000:] if stderr else "Unknown download failure")
-        return False
+    print(f"\nERROR: Download encountered issues: {stderr[-1000:] if stderr else 'Unknown failure'}")
+    return False
 

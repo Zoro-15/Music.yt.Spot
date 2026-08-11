@@ -101,6 +101,32 @@ def get_ytdlp_auth_args() -> List[str]:
     ]
 
 
+def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
+    """
+    Returns native audio format selection arguments for yt-dlp.
+    Priority order:
+    1. Opus (.webm / .opus) — Highest quality native YouTube stream (~160kbps 48kHz Opus)
+    2. M4A (.m4a) — AAC stream
+    3. Best Audio stream (bestaudio/best)
+    Zero lossy re-encoding.
+    """
+    if cfg is None:
+        try:
+            from downloader.config import load_config
+            cfg = load_config()
+        except Exception:
+            cfg = {}
+
+    fmt = str(cfg.get("audio_format", "best_native")).lower()
+
+    if fmt in ["m4a", "aac"]:
+        return ["-f", "ba[ext=m4a]/ba[ext=webm]/bestaudio/best"]
+    elif fmt in ["opus", "webm"]:
+        return ["-f", "ba[ext=webm]/ba[ext=m4a]/bestaudio/best"]
+    else:  # "best_native" default: Priority 1: Opus (.webm), Priority 2: M4A (.m4a)
+        return ["-f", "ba[ext=webm]/ba[ext=m4a]/bestaudio/best"]
+
+
 # ============================================================
 # TEXT HELPERS & SANITIZATION
 # ============================================================
@@ -267,4 +293,20 @@ def clean_project_cache(include_output: bool = False) -> bool:
     return True
 
 
-
+def generate_m3u8_playlist(playlist_name: str, audio_files: List[Path]) -> Optional[Path]:
+    """Generates an .m3u8 playlist file in OUTPUT_DIR for imported playlist audio tracks."""
+    if not playlist_name or not audio_files:
+        return None
+    try:
+        clean_name = sanitize_filename(playlist_name)
+        m3u_path = OUTPUT_DIR / f"{clean_name}.m3u8"
+        with open(m3u_path, "w", encoding="utf-8") as f:
+            f.write("#EXTM3U\n")
+            for audio in sorted(audio_files):
+                if audio.is_file() and audio.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]:
+                    f.write(f"{audio.name}\n")
+        print(f" ✓ Generated Playlist File: {m3u_path.name}")
+        return m3u_path
+    except Exception as e:
+        print(f" ⚠ Could not create .m3u8 playlist file: {e}")
+        return None

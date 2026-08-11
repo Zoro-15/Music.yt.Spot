@@ -10,9 +10,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "min_score": 70,
     "ytmusic_priority": True,
     "fetch_lyrics": True,
+    "embed_lyrics": True,
+    "fetch_high_res_cover": True,
     "square_crop_artwork": True,
     "auto_sync_android_music": True,
     "include_index_in_filename": False,
+    "duration_match_threshold_sec": 10,
+    "audio_format": "best_native",
 }
 
 

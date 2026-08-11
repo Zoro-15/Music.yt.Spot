@@ -1,18 +1,33 @@
 import json
-from typing import List, Dict, Tuple, Set, Any
-from downloader.utils import normalize, words, run_command, get_ytdlp_auth_args
+from difflib import SequenceMatcher
+from typing import List, Dict, Tuple, Set, Any, Optional
+from downloader.utils import normalize, words, run_command
 
 SEARCH_COUNT = 5
 MIN_SCORE = 70
 
 
 def similarity(title: str, candidate: str) -> float:
-    """Calculates word overlap ratio between Spotify title and YouTube candidate title."""
-    a = words(title)
-    b = words(candidate)
-    if not a or not b:
+    """
+    Calculates combined title similarity using fuzzy sequence matching (difflib)
+    and set word overlap.
+    """
+    a_norm = normalize(title)
+    b_norm = normalize(candidate)
+
+    if not a_norm or not b_norm:
         return 0.0
-    return len(a & b) / len(a)
+
+    # 1. Fuzzy Sequence Ratio (handles word order, minor spelling differences)
+    seq_ratio = SequenceMatcher(None, a_norm, b_norm).ratio()
+
+    # 2. Word Set Overlap Ratio
+    w_a = words(title)
+    w_b = words(candidate)
+    set_ratio = (len(w_a & w_b) / len(w_a)) if w_a else 0.0
+
+    # Weighted average: 60% sequence ratio, 40% set overlap
+    return (0.6 * seq_ratio) + (0.4 * set_ratio)
 
 
 def artist_match(artists: str, candidate_title: str, candidate_channel: str) -> int:
@@ -63,29 +78,39 @@ def bad_candidate(title: str) -> bool:
     return any(w in t for w in bad_words)
 
 
-def score_candidate(spotify_title: str, spotify_artists: str, yt_title: str, channel: str) -> int:
-    """
-    Scores a YouTube candidate (0 to 100) based on title similarity, artist presence,
-    prefix matching, and penalty words.
-    """
+def score_candidate(
+    spotify_title: str,
+    spotify_artists: str,
+    yt_title: str,
+    channel: str,
+    candidate_duration: Optional[int] = None,
+    target_duration: Optional[int] = None,
+) -> int:
+    """Scores a YouTube candidate (0 to 100) based on title, artist, topic channel, duration, and penalties."""
     score = 0
-
-    # Title similarity (up to 50 pts)
-    title_sim = similarity(spotify_title, yt_title)
-    score += min(50, int(title_sim * 50))
-
-    # Artist presence (up to 40 pts)
+    score += min(50, int(similarity(spotify_title, yt_title) * 50))
     score += artist_match(spotify_artists, yt_title, channel)
 
-    # Bad candidate penalty (-35 pts)
     if bad_candidate(yt_title):
         score -= 35
 
-    # Prefix match bonus (+10 pts)
-    spotify_norm = normalize(spotify_title)
-    youtube_norm = normalize(yt_title)
+    # Phase 2 Feature: Official Topic Channel Bonus (+20 pts)
+    chan_norm = normalize(channel)
+    if "topic" in chan_norm or channel.endswith("- Topic"):
+        score += 20
 
-    if youtube_norm.startswith(spotify_norm):
+    if candidate_duration and target_duration and candidate_duration > 0 and target_duration > 0:
+        diff = abs(candidate_duration - target_duration)
+        if diff <= 5:
+            score += 15
+        elif diff <= 10:
+            score += 5
+        elif diff > 30:
+            score -= 40
+        elif diff > 15:
+            score -= 20
+
+    if normalize(yt_title).startswith(normalize(spotify_title)):
         score += 10
 
     return max(0, min(100, score))
@@ -97,73 +122,50 @@ def search_youtube(
     count: int = SEARCH_COUNT,
     min_score: int = MIN_SCORE,
     use_ytmusic: bool = True,
+    target_duration_sec: Optional[int] = None,
 ) -> Tuple[List[Dict[str, Any]], str]:
-    """
-    Queries YouTube using multi-pass search strategy (YTM topic search -> main YT -> fallback query)
-    and returns sorted, scored candidates.
-    """
-    search_queries = []
-    if artists:
-        search_queries.append(f"{artists} - {title}")
-        search_queries.append(f"{artists} {title} Audio")
-    search_queries.append(f"{title} Official Audio")
-    search_queries.append(f"{title}")
+    """Queries YouTube using fast 1-pass search strategy to minimize subprocess overhead."""
+    primary_query = f"{artists} - {title} Topic" if artists else f"{title} Official Audio"
+    fallback_query = f"{artists} {title}" if artists else title
 
     all_candidates: List[Dict[str, Any]] = []
     seen_urls: Set[str] = set()
 
-    for query in search_queries:
-        cmd = [
-            "yt-dlp",
-            "--flat-playlist",
-            "--dump-single-json",
-            f"ytsearch{count}:{query}",
-        ]
-
-        code, stdout, stderr = run_command(cmd)
-        if code != 0:
+    for query in [primary_query, fallback_query]:
+        cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", f"ytsearch{count}:{query}"]
+        code, stdout, _ = run_command(cmd)
+        if code != 0 or not stdout.strip():
             continue
 
         try:
-            data = json.loads(stdout)
+            entries = (json.loads(stdout) or {}).get("entries") or []
         except Exception:
             continue
-
-        entries = data.get("entries") or []
 
         for entry in entries:
             if not entry:
                 continue
-
             yt_title = entry.get("title") or ""
             channel = entry.get("channel") or entry.get("uploader") or ""
-            url = entry.get("webpage_url")
-
-            if not url and entry.get("id"):
-                url = f"https://www.youtube.com/watch?v={entry['id']}"
+            url = entry.get("webpage_url") or (f"https://www.youtube.com/watch?v={entry['id']}" if entry.get("id") else None)
+            candidate_duration = entry.get("duration")
 
             if not yt_title or not url or url in seen_urls:
                 continue
 
             seen_urls.add(url)
-            score = score_candidate(title, artists, yt_title, channel)
-
+            cand_score = score_candidate(title, artists, yt_title, channel, candidate_duration, target_duration_sec)
             all_candidates.append({
-                "score": score,
+                "score": cand_score,
                 "title": yt_title,
                 "channel": channel,
                 "url": url,
+                "duration": candidate_duration,
             })
 
         all_candidates.sort(key=lambda x: x["score"], reverse=True)
-
-        # If top candidate meets or exceeds min_score threshold, return immediately
         if all_candidates and all_candidates[0]["score"] >= min_score:
             return all_candidates, ""
 
-    if all_candidates:
-        return all_candidates, ""
-
-    return [], "No YouTube search candidates found"
-
+    return (all_candidates, "") if all_candidates else ([], "No YouTube candidates found")
 

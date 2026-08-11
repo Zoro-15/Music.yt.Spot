@@ -1,5 +1,6 @@
 from downloader.config import load_config
-from downloader.ffmpeg_tagger import apply_spotify_metadata, crop_square_artwork
+from downloader.cover_art import fetch_high_res_cover
+from downloader.ffmpeg_tagger import apply_native_metadata, crop_square_artwork
 from downloader.lyrics import fetch_lyrics
 from downloader.matcher import search_youtube
 from downloader.utils import (
@@ -9,99 +10,55 @@ from downloader.utils import (
     print_banner,
     sync_to_android_music,
     get_ytdlp_auth_args,
+    get_audio_quality_args,
 )
 
 
 def search_and_download_song(query: str) -> bool:
-    """
-    Searches YouTube / YouTube Music by song name, displays top candidate,
-    and downloads native audio, artwork (cropped 1:1), metadata, and synced lyrics.
-    """
+    """Searches YouTube / YouTube Music by song name and downloads audio with metadata and lyrics."""
     if not query or not query.strip():
         print("ERROR: Please provide a song name or search query.")
         return False
 
     query = query.strip()
     print_banner(f"Searching Song: '{query}'")
-
     cfg = load_config()
-    min_score = cfg.get("min_score", 50)
-    use_ytmusic = cfg.get("ytmusic_priority", True)
 
-    candidates, error = search_youtube(
-        title=query, artists="", min_score=min_score, use_ytmusic=use_ytmusic
-    )
-
+    candidates, error = search_youtube(title=query, artists="", min_score=cfg.get("min_score", 50), use_ytmusic=cfg.get("ytmusic_priority", True))
     if error or not candidates:
         print(f"✖ Search failed: {error or 'No candidates found'}")
         return False
 
-    print("Top Search Candidates:")
-    for idx, c in enumerate(candidates[:3], 1):
-        print(f"  [{idx}] {c['title']} | Channel: {c['channel']} (Score: {c['score']})")
-
     best = candidates[0]
-    print("\nSelected Best Match:")
-    print(f"  Title  : {best['title']}")
-    print(f"  Channel: {best['channel']}")
-    print(f"  URL    : {best['url']}\n")
+    print(f"Match: {best['title']} | Channel: {best['channel']} (Score: {best['score']})\n")
 
     safe_title = sanitize_filename(best["title"])
-    filename = safe_title
-    output_template = str(OUTPUT_DIR / f"{filename}.%(ext)s")
+    output_template = str(OUTPUT_DIR / f"{safe_title}.%(ext)s")
 
-    cmd = [
-        "yt-dlp",
-        "--no-playlist",
-        "--retries", "5",
-        "--fragment-retries", "5",
-        "--retry-sleep", "2",
-        "--socket-timeout", "30",
-        "--continue",
-        # Native audio priority: M4A/AAC > WebM/Opus > best audio
-        "-f", "ba[ext=m4a]/ba[ext=webm]/ba",
-        "--add-metadata",
-        "--embed-thumbnail",
-        "--write-thumbnail",
-    ] + get_ytdlp_auth_args() + [
-        "-o", output_template,
-        best["url"],
-    ]
-
-    print("Downloading audio stream...")
+    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--add-metadata", "--embed-thumbnail", "--write-thumbnail"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
     code, stdout, stderr = run_command(cmd)
 
     if code != 0:
-        print("✖ Download failed")
-        print(stderr[-1500:] if stderr else "Unknown error")
+        print(f"✖ Download failed: {stderr[-1000:] if stderr else 'Unknown error'}")
         return False
 
-    # Find downloaded files
-    downloaded = list(OUTPUT_DIR.glob(f"{filename}.*"))
-    audio_files = [
-        p for p in downloaded
-        if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac"]
-    ]
-    thumb_files = [
-        p for p in downloaded
-        if p.suffix.lower() in [".webp", ".jpg", ".jpeg", ".png"]
-    ]
+    downloaded = list(OUTPUT_DIR.glob(f"{safe_title}.*"))
+    audio_files = [p for p in downloaded if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]]
+    thumb_files = [p for p in downloaded if p.suffix.lower() in [".webp", ".jpg", ".jpeg", ".png"]]
 
     if audio_files:
         audio = audio_files[0]
-
-        # 1. Apply basic metadata if channel/title are present
-        apply_spotify_metadata(audio, best["title"], best["channel"], "Single Search")
-
-        # 2. Crop 1:1 square artwork if enabled
         if thumb_files and cfg.get("square_crop_artwork", True):
             crop_square_artwork(thumb_files[0])
 
-        # 3. Fetch LRCLIB lyrics if enabled
+        cover_bytes = fetch_high_res_cover(best["title"], best["channel"]) if cfg.get("fetch_high_res_cover", True) else None
+        lyrics_text = None
         if cfg.get("fetch_lyrics", True):
-            fetch_lyrics(best["title"], best["channel"], "", audio)
+            success, res, raw_lyrics = fetch_lyrics(best["title"], best["channel"], "", audio)
+            if success:
+                lyrics_text = raw_lyrics
 
-        # 4. Sync to Android Music folder if enabled
+        apply_native_metadata(audio, best["title"], best["channel"], "Single Search", image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None)
         if cfg.get("auto_sync_android_music", True):
             sync_to_android_music(audio)
 

@@ -16,9 +16,9 @@ def interactive_menu():
     """Displays an interactive terminal menu for users running 'python main.py'."""
     while True:
         print_banner("Termux Playlist Audio Downloader")
-        print("  1. Spotify Playlist JSON (Exportify mode)")
+        print("  1. Spotify Playlist / Album / Track (Direct URL or Exportify JSON)")
         print("  2. Search & Download Song by Name")
-        print("  3. Download from Link (YT / YT Music Playlist, Album, or Video)")
+        print("  3. Download from Universal Link (YouTube, YT Music, or Spotify)")
         print("  4. View Spotify Download Status")
         print("  5. Review Low-Confidence / Failed Tracks")
         print("  6. Clean / Reset Cache, CSV & Logs")
@@ -28,8 +28,8 @@ def interactive_menu():
         choice = input("Select an option [1-7]: ").strip()
 
         if choice == "1":
-            print("\nPreparing Spotify playlist JSON...")
-            if prepare_csv():
+            url_or_json = input("\nEnter Spotify URL or press Enter to auto-discover local JSON: ").strip()
+            if prepare_csv(url_or_json if url_or_json else None):
                 start = input("\nStart downloading playlist tracks now? [Y/n]: ").strip()
                 if start.lower() != "n":
                     run_download()
@@ -40,7 +40,7 @@ def interactive_menu():
                 search_and_download_song(query)
             break
         elif choice == "3":
-            url = input("\nEnter YouTube / YT Music URL (Playlist, Album, or Track): ").strip()
+            url = input("\nEnter YouTube / YT Music / Spotify URL: ").strip()
             if url:
                 download_from_link(url)
             break
@@ -69,13 +69,13 @@ Termux Playlist Audio Downloader — Usage Guide:
 Interactive Mode:
   python main.py
 
-Spotify JSON Mode (8x Parallel Default):
-  python main.py spotify [optional_path_to_exportify_json]
+Spotify URL / JSON Mode (Parallel Download Engine):
+  python main.py spotify [url_or_json_path]
 
 Search Song by Name:
   python main.py search "Song Name"
 
-Universal Link Downloader (YouTube / YT Music Playlist, Album, or Video):
+Universal Link Downloader (YouTube, YT Music, or Spotify):
   python main.py link "URL"
 
 Interactive Review Mode:
@@ -98,9 +98,9 @@ def main():
 
     if cmd in ["-h", "--help", "help"]:
         print_usage()
-    elif cmd == "spotify":
-        path = sys.argv[2] if len(sys.argv) > 2 else None
-        if prepare_csv(path):
+    elif cmd in ["spotify", "sp"]:
+        path_or_url = sys.argv[2] if len(sys.argv) > 2 else None
+        if prepare_csv(path_or_url):
             run_download()
     elif cmd == "search":
         if len(sys.argv) < 3:
@@ -109,10 +109,10 @@ def main():
             sys.exit(1)
         query = " ".join(sys.argv[2:])
         search_and_download_song(query)
-    elif cmd in ["link", "youtube", "video"]:
+    elif cmd in ["link", "youtube", "video", "url"]:
         if len(sys.argv) < 3:
-            print("ERROR: Please provide a valid YouTube or YT Music URL.")
-            print("Example: python main.py link \"https://music.youtube.com/playlist?list=...\"")
+            print("ERROR: Please provide a valid YouTube, YT Music, or Spotify URL.")
+            print("Example: python main.py link \"https://open.spotify.com/playlist/...\"")
             sys.exit(1)
         url = sys.argv[2]
         download_from_link(url)

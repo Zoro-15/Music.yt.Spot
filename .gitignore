@@ -24,6 +24,10 @@ output/*
 *.tmp
 *.temp
 
+# Documentation & README
+!README.md
+!functions.md
+
 # System / OS / Auth metadata
 .DS_Store
 Thumbs.db
@@ -32,3 +36,4 @@ cookies.txt
 .venv/
 env/
 venv/
+

@@ -33,12 +33,14 @@ def is_valid_exportify_json(file_path: Path) -> bool:
 def discover_playlist_json(provided_path: Optional[Union[str, Path]] = None) -> Optional[Path]:
     """
     Discovers Exportify JSON playlist files across input/, project root, and Android Downloads folders,
-    and presents a numbered selection menu to the user.
+    or prompts for a Spotify URL.
     """
     if provided_path:
         p = Path(provided_path).resolve()
         if p.exists() and is_valid_exportify_json(p):
             return p
+        if not isinstance(provided_path, Path) and ("spotify.com" in str(provided_path) or "spotify:" in str(provided_path)):
+            return None
         print(f"WARNING: Specified file '{provided_path}' does not exist or is not a valid Exportify JSON.")
 
     all_found: List[Tuple[Path, str]] = []
@@ -64,6 +66,12 @@ def discover_playlist_json(provided_path: Optional[Union[str, Path]] = None) -> 
                 seen_paths.add(f.resolve())
 
     if not all_found:
+        print("\nNo local Exportify JSON files found.")
+        url_input = input("Paste a Spotify Playlist / Album / Track URL (or press Enter to cancel): ").strip()
+        if url_input and ("spotify.com" in url_input or "spotify:" in url_input):
+            from downloader.spotify_mode import prepare_csv
+            if prepare_csv(url_input):
+                return Path(url_input)  # dummy non-none return indicator
         return None
 
     print("\n" + "=" * 60)
@@ -73,7 +81,13 @@ def discover_playlist_json(provided_path: Optional[Union[str, Path]] = None) -> 
         print(f"  [{idx}] {f_path.name}  (Location: {location})")
     print("=" * 60)
 
-    choice = input(f"\nSelect JSON file number [1-{len(all_found)}] (or press Enter for 1): ").strip()
+    choice = input(f"\nSelect JSON file number [1-{len(all_found)}] or paste Spotify URL: ").strip()
+    if choice and ("spotify.com" in choice or "spotify:" in choice):
+        from downloader.spotify_mode import prepare_csv
+        if prepare_csv(choice):
+            return Path(choice)
+        return None
+
     sel_idx = 0
     if choice and choice.isdigit():
         val = int(choice) - 1
@@ -92,5 +106,3 @@ def discover_playlist_json(provided_path: Optional[Union[str, Path]] = None) -> 
             return selected_file
 
     return selected_file
-
-
