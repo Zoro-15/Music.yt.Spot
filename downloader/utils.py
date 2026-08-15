@@ -95,17 +95,17 @@ def get_ytdlp_auth_args() -> List[str]:
         except Exception:
             pass
 
-    # 3. Android VR & Web Creator Player Client (Zero Bot-Check Client)
+    # 3. Robust Player Client (Android + Web + MWeb)
     return [
-        "--user-agent", "Mozilla/5.0 (Android 14; VR; Oculus Quest 2) AppleWebKit/537.36",
-        "--extractor-args", "youtube:player_client=android_vr,web_creator,mweb"
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "--extractor-args", "youtube:player_client=android,web,mweb"
     ]
 
 
 def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
     """
-    Returns native audio extraction and thumbnail embedding flags for yt-dlp.
-    Matches official YTDLnis postprocessor options.
+    Returns native audio extraction and format selection flags for yt-dlp.
+    Includes primary format selectors with multi-tiered fallback (m4a -> opus -> any best audio).
     """
     if cfg is None:
         try:
@@ -117,9 +117,12 @@ def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
     fmt = str(cfg.get("audio_format", "best_native")).lower()
 
     if fmt in ["m4a", "aac"]:
-        return ["-x", "--audio-format", "m4a", "--audio-quality", "0"]
+        return ["-f", "ba[ext=m4a]/ba[ext=aac]/ba/b", "-x", "--audio-format", "m4a", "--audio-quality", "0"]
+    elif fmt in ["opus", "webm"]:
+        return ["-f", "ba[ext=opus]/ba[ext=webm]/ba[ext=m4a]/ba/b", "-x", "--audio-format", "opus", "--audio-quality", "0"]
     else:
-        return ["-x", "--audio-format", "opus", "--audio-quality", "0"]
+        # best_native: prioritize best direct native stream (m4a or opus/webm) with fallback to any available audio
+        return ["-f", "ba[ext=m4a]/ba[ext=opus]/ba[ext=webm]/ba/bestaudio/b"]
 
 
 

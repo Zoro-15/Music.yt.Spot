@@ -48,9 +48,24 @@ def _search_and_download_song_impl(query: str) -> bool:
     safe_title = sanitize_filename(best["title"])
     output_template = str(OUTPUT_DIR / f"{safe_title}.%(ext)s")
 
-    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
+    audio_args = get_audio_quality_args(cfg)
+    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
     code, stdout, stderr = run_command(cmd)
 
+    if code != 0:
+        # Fallback 1: iOS & Web player client fallback
+        fallback_cmd1 = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail", "--convert-thumbnails", "jpg", "--extractor-args", "youtube:player_client=ios,web"] + ["-o", output_template, best["url"]]
+        code, stdout, stderr = run_command(fallback_cmd1)
+
+    if code != 0:
+        # Fallback 2: Secondary format fallback (explicit m4a / aac)
+        fallback_cmd2 = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue", "-f", "ba[ext=m4a]/ba/b", "-x", "--audio-format", "m4a", "--audio-quality", "0", "--write-thumbnail", "--convert-thumbnails", "jpg", "--extractor-args", "youtube:player_client=android,web,mweb"] + ["-o", output_template, best["url"]]
+        code, stdout, stderr = run_command(fallback_cmd2)
+
+    if code != 0:
+        # Fallback 3: Universal bestaudio / best format fallback
+        fallback_cmd3 = ["yt-dlp", "--no-playlist", "--retries", "5", "--socket-timeout", "30", "--continue", "-f", "bestaudio/best", "-x", "--audio-format", "m4a", "--extractor-args", "youtube:player_client=web,android"] + ["-o", output_template, best["url"]]
+        code, stdout, stderr = run_command(fallback_cmd3)
 
     if code != 0:
         print(f"✖ Download failed: {stderr[-1000:] if stderr else 'Unknown error'}")

@@ -108,10 +108,15 @@ def download_youtube_playlist(url: str) -> bool:
 
             v_code, _, v_stderr = run_command(v_cmd)
 
-            # Retry 2: Automatic fallback with alternate player_client flags if primary download encountered issues
+            # Retry 2: Automatic fallback with alternate player_client flags
             if v_code != 0:
-                fallback_v_cmd = ["yt-dlp", "--no-playlist", "--retries", "3", "--socket-timeout", "20", "--extractor-args", "youtube:player_client=ios,web"] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", t_template, t_url]
-                v_code, _, v_stderr = run_command(fallback_v_cmd)
+                fallback_v_cmd1 = ["yt-dlp", "--no-playlist", "--retries", "3", "--socket-timeout", "20", "--extractor-args", "youtube:player_client=ios,web"] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + ["-o", t_template, t_url]
+                v_code, _, v_stderr = run_command(fallback_v_cmd1)
+
+            # Retry 3: Secondary format fallback (explicit m4a / aac)
+            if v_code != 0:
+                fallback_v_cmd2 = ["yt-dlp", "--no-playlist", "--retries", "3", "--socket-timeout", "20", "-f", "ba[ext=m4a]/ba/b", "-x", "--audio-format", "m4a", "--audio-quality", "0", "--extractor-args", "youtube:player_client=android,web,mweb", "--write-thumbnail", "--convert-thumbnails", "jpg"] + ["-o", t_template, t_url]
+                v_code, _, v_stderr = run_command(fallback_v_cmd2)
 
             if v_code == 0:
                 downloaded = list(set(OUTPUT_DIR.glob("*.*")) - before_files)
@@ -176,9 +181,19 @@ def download_youtube_video(url: str) -> bool:
     output_template = str(OUTPUT_DIR / "%(title)s.%(ext)s")
     before_files = set(OUTPUT_DIR.glob("*.*"))
 
-    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + get_audio_quality_args(cfg) + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, url]
-
+    audio_args = get_audio_quality_args(cfg)
+    cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, url]
     code, stdout, stderr = run_command(cmd)
+
+    if code != 0:
+        # Retry 2: Player client fallback
+        fallback_cmd1 = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail", "--convert-thumbnails", "jpg", "--extractor-args", "youtube:player_client=ios,web"] + ["-o", output_template, url]
+        code, stdout, stderr = run_command(fallback_cmd1)
+
+    if code != 0:
+        # Retry 3: Secondary format fallback (explicit m4a / aac)
+        fallback_cmd2 = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue", "-f", "ba[ext=m4a]/ba/b", "-x", "--audio-format", "m4a", "--audio-quality", "0", "--extractor-args", "youtube:player_client=android,web,mweb", "--write-thumbnail", "--convert-thumbnails", "jpg"] + ["-o", output_template, url]
+        code, stdout, stderr = run_command(fallback_cmd2)
 
     if code == 0:
         new_files = list(set(OUTPUT_DIR.glob("*.*")) - before_files)
