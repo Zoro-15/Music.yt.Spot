@@ -106,22 +106,26 @@ def _search_and_download_song_impl(query: str) -> bool:
         print(f"✖ Download failed: {err_msg}")
         return False
 
-    from downloader.utils import process_and_finalize_audio
+    from downloader.utils import process_and_finalize_audio, clean_title_and_artist
+
+    clean_t, clean_a = clean_title_and_artist(best["title"], best.get("channel") or "")
 
     ok, res, msg = process_and_finalize_audio(
         downloaded_files=downloaded,
-        title=best["title"],
-        artist=best["channel"],
+        title=clean_t,
+        artist=clean_a,
         album="Single Search",
         target_duration_sec=best.get("duration"),
+        video_url=best.get("url"),
         cfg=cfg,
     )
     if not ok:
         print(f"✖ Post-processing failed: {msg}")
         return False
 
-    print_banner(f"✓ SONG DOWNLOAD COMPLETE: {best['title']}")
+    print_banner(f"✓ SONG DOWNLOAD COMPLETE: {clean_t} — {clean_a}")
     return True
+
 
 
 

@@ -132,15 +132,22 @@ def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
 
 def normalize(text: str) -> str:
     """
-    Normalizes string by lowercasing, converting non-word characters to spaces
-    (preserving Unicode word characters across languages), and stripping extra whitespace.
+    Normalizes string by lowercasing, converting punctuation and symbols to spaces
+    (preserving all Unicode letters, numbers, and combining marks across languages),
+    and stripping extra whitespace.
     """
     if not text:
         return ""
     text = unicodedata.normalize("NFKC", str(text)).lower()
-    text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
+    # Keep letters (L), combining marks/matras (M), numbers (N), and whitespace
+    clean_chars = [
+        c if unicodedata.category(c)[0] in ("L", "M", "N") or c.isspace() else " "
+        for c in text
+    ]
+    text = "".join(clean_chars)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
 
 
 def words(text: str) -> Set[str]:
@@ -356,6 +363,49 @@ def generate_m3u8_playlist(playlist_name: str, audio_files: Optional[List[Path]]
         return None
 
 
+def clean_title_and_artist(raw_title: str, raw_artist: str = "") -> Tuple[str, str]:
+    """
+    Cleans video boilerplate from YouTube titles and channels (e.g. '(Official Video)',
+    '[4K]', '| Audio', '- Topic') and separates 'Artist - Track' patterns if needed.
+    """
+    title = raw_title.strip() if raw_title else ""
+    artist = raw_artist.strip() if raw_artist else ""
+
+    # Clean channel / artist boilerplate
+    artist = re.sub(r"\s*-\s*Topic$", "", artist, flags=re.IGNORECASE).strip()
+    artist = re.sub(r"\s*(?:VEVO|Official|Music|Records)$", "", artist, flags=re.IGNORECASE).strip()
+
+    # Clean YouTube title boilerplate
+    patterns = [
+        r"\((?:official\s*(?:music\s*video|video|audio|lyric\s*video|lyrical|song|track)?)\)",
+        r"\[(?:official\s*(?:music\s*video|video|audio|lyric\s*video|lyrical|song|track)?)\]",
+        r"\((?:audio|video|lyrics|full\s*song|full\s*video|clean|explicit|hq|hd|4k|remastered)\)",
+        r"\[(?:audio|video|lyrics|full\s*song|full\s*video|clean|explicit|hq|hd|4k|remastered)\]",
+        r"\|\s*(?:official\s*(?:music\s*video|video|audio)|lyrics?|4k\s*uhd|hd).*",
+        r"//\s*(?:official\s*(?:music\s*video|video|audio)|lyrics?).*",
+    ]
+    for pat in patterns:
+        title = re.sub(pat, "", title, flags=re.IGNORECASE).strip()
+
+    # If title has "Artist - Song" or "Song - Artist", parse cleanly if artist was missing/generic
+    if " - " in title:
+        parts = [p.strip() for p in title.split(" - ", 1) if p.strip()]
+        if len(parts) == 2:
+            left, right = parts[0], parts[1]
+            if not artist or artist.lower() in left.lower():
+                artist = left
+                title = right
+            elif artist.lower() in right.lower():
+                artist = right
+                title = left
+
+    # Clean trailing dashes / punctuation
+    title = title.strip(" -|:_")
+    artist = artist.strip(" -|:_")
+
+    return title if title else raw_title, artist if artist else raw_artist
+
+
 def process_and_finalize_audio(
     downloaded_files: List[Path],
     title: str,
@@ -363,6 +413,7 @@ def process_and_finalize_audio(
     album: str = "",
     target_duration_sec: Optional[int] = None,
     cover_url: Optional[str] = None,
+    video_url: Optional[str] = None,
     track_number: Optional[int] = None,
     cfg: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, Optional[Path], str]:
@@ -370,9 +421,10 @@ def process_and_finalize_audio(
     Unified post-processor:
     1. Converts .webm (Opus) containers to native .opus losslessly.
     2. Crops 16:9 thumbnail into 1:1 square artwork.
-    3. Fetches high-res cover art & lyrics.
-    4. Applies native metadata (Mutagen / FFmpeg).
-    5. Syncs to Android system Music folder, clears output copy to save storage, & cleans up.
+    3. Fetches high-res cover art (Spotify/iTunes/Deezer) with fallback to local thumbnail.
+    4. Fetches and embeds synced lyrics.
+    5. Applies native metadata (Mutagen / FFmpeg).
+    6. Syncs to Android system Music folder, triggers Android MediaScanner, & cleans up.
     """
     if cfg is None:
         try:
@@ -407,7 +459,21 @@ def process_and_finalize_audio(
     if thumb_files and cfg.get("square_crop_artwork", True):
         crop_square_artwork(thumb_files[0])
 
-    cover_bytes = fetch_high_res_cover(title, artist, preferred_url=cover_url) if cfg.get("fetch_high_res_cover", True) else None
+    cover_bytes = None
+    if cfg.get("fetch_high_res_cover", True):
+        cover_bytes = fetch_high_res_cover(title, artist, preferred_url=cover_url, video_url=video_url)
+
+    # Robust Fallback: If online APIs didn't return an image, use the downloaded local thumbnail!
+    if not cover_bytes and thumb_files:
+        for tf in thumb_files:
+            if tf.exists() and tf.is_file() and tf.stat().st_size > 500:
+                try:
+                    cover_bytes = tf.read_bytes()
+                    if cover_bytes:
+                        break
+                except Exception:
+                    pass
+
     lyrics_text = None
     if cfg.get("fetch_lyrics", True):
         success, res, raw_lyrics = fetch_lyrics(title, artist, album, audio, duration_sec=target_duration_sec)
@@ -422,7 +488,15 @@ def process_and_finalize_audio(
                     except Exception:
                         pass
 
-    apply_native_metadata(audio, title, artist, album, image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None, track_number=track_number)
+    apply_native_metadata(
+        audio,
+        title=title,
+        artist=artist,
+        album=album,
+        image_bytes=cover_bytes,
+        lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None,
+        track_number=track_number,
+    )
 
     if cfg.get("auto_sync_android_music", True):
         synced, dest_file = sync_to_android_music(audio)
@@ -443,4 +517,5 @@ def process_and_finalize_audio(
                 pass
 
     return True, audio, "Processed successfully"
+
 

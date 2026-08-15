@@ -228,6 +228,7 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
         album=album,
         target_duration_sec=target_duration_sec,
         cover_url=cover_url,
+        video_url=best.get("url"),
         track_number=index,
         cfg=cfg,
     )
