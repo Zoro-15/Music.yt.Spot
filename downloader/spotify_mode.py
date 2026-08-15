@@ -126,7 +126,12 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
                 existing = d / f"{safe_title}{ext}"
             if existing.exists() and existing.is_file() and existing.stat().st_size > 1000:
                 if d == OUTPUT_DIR and cfg.get("auto_sync_android_music", True):
-                    sync_to_android_music(existing)
+                    synced, dest_f = sync_to_android_music(existing)
+                    if synced and dest_f and dest_f.exists() and existing.resolve() != dest_f.resolve():
+                        try:
+                            existing.unlink()
+                        except Exception:
+                            pass
                 return "success", {"title": title, "channel": "Local Disk", "score": 100}
 
 
@@ -143,7 +148,7 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
 
     filename = f"{index:03d} - {safe_title}" if cfg.get("include_index_in_filename", False) else safe_title
     output_template = str(OUTPUT_DIR / f"{filename}.%(ext)s")
-    audio_args = get_audio_quality_args(cfg)
+    before_files = set(OUTPUT_DIR.iterdir()) if OUTPUT_DIR.exists() else set()
 
     cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
     code, stdout, stderr = run_command(cmd)
@@ -171,7 +176,28 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
             err_reason = err_lines[-1] if err_lines else lines[-1]
         return "failed", err_reason
 
-    downloaded = list(OUTPUT_DIR.glob(f"{filename}.*"))
+    # Safely find downloaded files without glob bracket issues
+    after_files = set(OUTPUT_DIR.iterdir()) if OUTPUT_DIR.exists() else set()
+    new_files = [p for p in (after_files - before_files) if p.is_file()]
+    audio_new = [p for p in new_files if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]]
+
+    if audio_new:
+        downloaded = new_files
+    else:
+        from downloader.utils import normalize
+        norm_fn = normalize(filename)
+        norm_title = normalize(safe_title)
+        downloaded = [
+            p for p in OUTPUT_DIR.iterdir()
+            if p.is_file() and (
+                p.stem == filename
+                or p.name.startswith(f"{filename}.")
+                or p.stem == safe_title
+                or p.name.startswith(f"{safe_title}.")
+                or normalize(p.stem) in [norm_fn, norm_title]
+            )
+        ]
+
     from downloader.utils import process_and_finalize_audio
 
     ok, res, msg = process_and_finalize_audio(

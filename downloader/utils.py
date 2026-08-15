@@ -241,23 +241,23 @@ def trigger_android_media_scanner(file_path: Path) -> bool:
         return False
 
 
-def sync_to_android_music(file_path: Path) -> Tuple[bool, str]:
+def sync_to_android_music(file_path: Path) -> Tuple[bool, Optional[Path]]:
     """Copies completed audio (.opus/.m4a) and lyrics files to the Android system Music folder."""
     music_dir = find_android_music_dir()
     if not music_dir or not file_path.exists():
-        return False, "Android Music directory not found"
+        return False, None
 
     if file_path.suffix.lower() == ".webm":
-        return False, "Skipping .webm video container file"
+        return False, None
 
     try:
         dest = music_dir / file_path.name
         import shutil
         shutil.copy2(file_path, dest)
         trigger_android_media_scanner(dest)
-        return True, f"Synced to Android Music: {dest.name}"
-    except Exception as e:
-        return False, f"Could not sync to Music folder: {e}"
+        return True, dest
+    except Exception:
+        return False, None
 
 
 
@@ -323,20 +323,34 @@ def clean_project_cache(include_output: bool = False) -> bool:
     return True
 
 
-def generate_m3u8_playlist(playlist_name: str, audio_files: List[Path]) -> Optional[Path]:
-    """Generates an .m3u8 playlist file in OUTPUT_DIR for imported playlist audio tracks."""
-    if not playlist_name or not audio_files:
+def generate_m3u8_playlist(playlist_name: str, audio_files: Optional[List[Path]] = None) -> Optional[Path]:
+    """Generates an .m3u8 playlist file in Android Music folder / OUTPUT_DIR for imported playlist audio tracks."""
+    if not playlist_name:
         return None
     try:
         clean_name = sanitize_filename(playlist_name)
-        m3u_path = OUTPUT_DIR / f"{clean_name}.m3u8"
+        music_dir = find_android_music_dir()
+        target_dir = music_dir if (music_dir and music_dir.exists() and music_dir.is_dir()) else OUTPUT_DIR
+
+        found_tracks: List[Path] = []
+        if audio_files:
+            found_tracks.extend([a for a in audio_files if a.exists()])
+
+        if not found_tracks:
+            search_dirs = [d for d in [music_dir, OUTPUT_DIR] if d and d.exists() and d.is_dir()]
+            for d in search_dirs:
+                for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
+                    found_tracks.extend(d.glob(f"*{ext}"))
+
+        m3u_path = target_dir / f"{clean_name}.m3u8"
         with open(m3u_path, "w", encoding="utf-8") as f:
             f.write("#EXTM3U\n")
-            for audio in sorted(audio_files):
+            for audio in sorted(set(found_tracks), key=lambda x: x.name):
                 if audio.is_file() and audio.suffix.lower() in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
                     f.write(f"{audio.name}\n")
 
         print(f" ✓ Generated Playlist File: {m3u_path.name}")
+        trigger_android_media_scanner(m3u_path)
         return m3u_path
     except Exception as e:
         print(f" ⚠ Could not create .m3u8 playlist file: {e}")
@@ -359,7 +373,7 @@ def process_and_finalize_audio(
     2. Crops 16:9 thumbnail into 1:1 square artwork.
     3. Fetches high-res cover art & lyrics.
     4. Applies native metadata (Mutagen / FFmpeg).
-    5. Syncs to Android system Music folder & cleans up.
+    5. Syncs to Android system Music folder, clears output copy to save storage, & cleans up.
     """
     if cfg is None:
         try:
@@ -401,19 +415,31 @@ def process_and_finalize_audio(
         if success:
             lyrics_text = raw_lyrics
             if isinstance(res, Path) and cfg.get("auto_sync_android_music", True):
-                sync_to_android_music(res)
+                synced_lrc, lrc_dest = sync_to_android_music(res)
+                if synced_lrc and lrc_dest and lrc_dest.exists():
+                    try:
+                        if res.exists() and res.resolve() != lrc_dest.resolve():
+                            res.unlink()
+                    except Exception:
+                        pass
 
     apply_native_metadata(audio, title, artist, album, image_bytes=cover_bytes, lyrics_text=lyrics_text if cfg.get("embed_lyrics", True) else None, track_number=track_number)
 
     if cfg.get("auto_sync_android_music", True):
-        synced, _ = sync_to_android_music(audio)
-        if synced:
+        synced, dest_file = sync_to_android_music(audio)
+        if synced and dest_file and dest_file.exists() and dest_file.stat().st_size > 0:
+            # Keep file only in Music folder to save device storage
             try:
-                if audio.exists():
+                if audio.exists() and audio.resolve() != dest_file.resolve():
                     audio.unlink()
-                for t in thumb_files:
-                    if t.exists():
-                        t.unlink()
+            except Exception:
+                pass
+            audio = dest_file
+
+        for t in thumb_files:
+            try:
+                if t.exists():
+                    t.unlink()
             except Exception:
                 pass
 

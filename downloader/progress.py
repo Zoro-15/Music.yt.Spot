@@ -99,10 +99,10 @@ def extract_artist_tag(audio_obj: Any) -> str:
     return ""
 
 
-def audit_and_fix_mismatched_tracks(force_delete: bool = True, reset_failed: bool = True) -> int:
+def audit_and_fix_mismatched_tracks(force_delete: bool = False, reset_failed: bool = True) -> int:
     """
-    Audits existing downloaded tracks across output/ and Android Music folders against target metadata in tracks.csv.
-    Removes wrong/mismatched audio files and resets failed tracks so they can all be re-downloaded correctly.
+    Audits downloaded tracks across output/ and Android Music folders against target metadata in tracks.csv.
+    Flags low-confidence matches and resets failed tracks for re-download retry without deleting existing files.
     """
     from downloader.utils import OUTPUT_DIR, find_android_music_dir, print_banner, sanitize_filename
     from downloader.matcher import score_candidate, artist_match
@@ -112,7 +112,7 @@ def audit_and_fix_mismatched_tracks(force_delete: bool = True, reset_failed: boo
         print("No tracks.csv found to audit. Please prepare a playlist CSV first.")
         return 0
 
-    print_banner("Auditing Folder for Wrong Songs & Resetting Failed Tracks")
+    print_banner("Auditing Playlist & Resetting Failed Tracks")
 
     target_map: Dict[str, Dict[str, Any]] = {}
     with open(TRACKS_CSV, "r", encoding="utf-8") as f:
@@ -176,7 +176,7 @@ def audit_and_fix_mismatched_tracks(force_delete: bool = True, reset_failed: boo
                     if target_dur > 0 and hasattr(audio_info, "info") and hasattr(audio_info.info, "length"):
                         actual_dur = int(audio_info.info.length)
                         diff = abs(actual_dur - target_dur)
-                        if diff > 30 or (diff / max(target_dur, 1)) > 0.2:
+                        if diff > 45 and (diff / max(target_dur, 1)) > 0.35:
                             is_mismatch = True
                             reason = f"Duration mismatch (File: {actual_dur // 60}:{actual_dur % 60:02d}, Target: {target_dur // 60}:{target_dur % 60:02d})"
 
@@ -197,13 +197,12 @@ def audit_and_fix_mismatched_tracks(force_delete: bool = True, reset_failed: boo
             yt_title = p_entry.get("youtube_title") or ""
             yt_channel = p_entry.get("youtube_channel") or ""
 
-            if p_status == "review" or score < 60:
+            if p_status == "review" or score < 50:
                 is_mismatch = True
                 reason = f"Low confidence match score ({score}/100)"
             elif yt_title and yt_channel and target_artist:
-                # Re-evaluate with updated strict candidate scorer
-                new_score = score_candidate(title, target_artist, yt_title, yt_channel, target_duration=target_dur)
-                if new_score < 70:
+                new_score = score_candidate(title, target_artist, yt_title, yt_channel, candidate_duration=target_dur, target_duration=target_dur)
+                if new_score < 50:
                     is_mismatch = True
                     reason = f"Re-evaluated match score failed quality threshold ({new_score}/100)"
 
@@ -214,18 +213,27 @@ def audit_and_fix_mismatched_tracks(force_delete: bool = True, reset_failed: boo
                 if found_file and found_file.exists():
                     try:
                         found_file.unlink()
-                        print(f"    ✓ Removed wrong file: {found_file.name}")
+                        print(f"    ✓ Removed file: {found_file.name}")
+                        # Also remove corresponding lyrics (.lrc) and artwork sidecars
+                        for ext in [".lrc", ".jpg", ".jpeg", ".png", ".webp"]:
+                            sidecar = found_file.with_suffix(ext)
+                            if sidecar.exists():
+                                try:
+                                    sidecar.unlink()
+                                    print(f"    ✓ Removed related subtitle/artwork: {sidecar.name}")
+                                except Exception:
+                                    pass
                     except Exception as e:
                         print(f"    ✖ Could not remove {found_file.name}: {e}")
 
                 if idx in progress:
                     del progress[idx]
 
-    total_reset = mismatched_count + failed_reset_count
+    total_reset = (mismatched_count if force_delete else 0) + failed_reset_count
     if total_reset > 0:
         save_progress(progress, force=True)
 
-    print(f"\nAudit complete. Reset {total_reset} track(s) total ({mismatched_count} wrong files removed, {failed_reset_count} failed tracks reset).")
+    print(f"\nAudit complete. Found {mismatched_count} flagged track(s), reset {failed_reset_count} failed track(s).")
     return total_reset
 
 
