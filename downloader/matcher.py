@@ -77,9 +77,6 @@ def search_youtube_entries(query: str, count: int = SEARCH_COUNT, use_ytmusic: b
             _save_search_cache(c)
 
     return entries
-            _save_search_cache(c)
-
-    return entries
 
 
 def similarity(title: str, candidate: str) -> float:
