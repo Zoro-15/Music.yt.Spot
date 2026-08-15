@@ -251,12 +251,39 @@ def _run_download_impl(cfg: Dict[str, Any]) -> None:
             tracks.append(row)
 
     progress = load_progress()
-    pending = [r for r in tracks if progress.get(str(r["index"]), {}).get("status") != "success"]
+    music_dir = find_android_music_dir()
+    search_dirs: List[Path] = [OUTPUT_DIR]
+    if music_dir and music_dir.exists():
+        search_dirs.append(music_dir)
+        try:
+            for sub in music_dir.iterdir():
+                if sub.is_dir():
+                    search_dirs.append(sub)
+        except Exception:
+            pass
+
+    def track_exists_on_disk(row: Dict[str, str]) -> bool:
+        idx = int(row["index"])
+        safe_title = sanitize_filename(row["title"])
+        filename_with_idx = f"{idx:03d} - {safe_title}"
+        for d in search_dirs:
+            for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
+                p1 = d / f"{filename_with_idx}{ext}"
+                p2 = d / f"{safe_title}{ext}"
+                if (p1.exists() and p1.is_file() and p1.stat().st_size > 1000) or (p2.exists() and p2.is_file() and p2.stat().st_size > 1000):
+                    return True
+        return False
+
+    pending = []
+    for r in tracks:
+        idx_str = str(r["index"])
+        p_status = progress.get(idx_str, {}).get("status")
+        if p_status != "success" or not track_exists_on_disk(r):
+            pending.append(r)
 
     if not pending:
-        print("\nAll tracks are already completed!")
-        all_audios = list(OUTPUT_DIR.glob("*.*"))
-        generate_m3u8_playlist("Spotify Playlist", all_audios)
+        print("\nAll tracks are already completed and verified on disk!")
+        generate_m3u8_playlist("Spotify Playlist")
         print_banner("PLAYLIST PROCESSING COMPLETE")
         return
 

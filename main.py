@@ -8,7 +8,7 @@ import argparse
 from downloader.spotify_mode import prepare_csv, run_download
 from downloader.search_mode import search_and_download_song
 from downloader.youtube_mode import download_from_link
-from downloader.progress import show_status, audit_and_fix_mismatched_tracks
+from downloader.progress import show_status, reset_cache_and_failed_tracks
 from downloader.review_mode import run_review_mode
 from downloader.utils import print_banner, clean_project_cache
 from downloader.config import load_config, save_config
@@ -104,7 +104,7 @@ def interactive_menu():
         print("  3. Download from Universal Link (YouTube, YT Music, or Spotify)")
         print("  4. View Spotify Download Status")
         print("  5. Review Low-Confidence / Failed Tracks")
-        print("  6. Audit & Fix Mismatched / Failed Tracks (Auto-clean & Re-download)")
+        print("  6. Reset Progress Cache & Prepare Missing Tracks (Safe Retry)")
         print("  7. Clean / Reset Cache, CSV & Logs")
         print("  8. Manage Settings (config.json)")
         print("  9. Exit")
@@ -136,11 +136,7 @@ def interactive_menu():
             run_review_mode()
             input("\nPress Enter to return to menu...")
         elif choice == "6":
-            removed = audit_and_fix_mismatched_tracks(force_delete=True)
-            if removed > 0:
-                re_dn = input("\nRe-download corrected tracks now? [Y/n]: ").strip().lower()
-                if re_dn != "n":
-                    run_download()
+            reset_cache_and_failed_tracks()
             input("\nPress Enter to return to menu...")
         elif choice == "7":
             confirm = input("Reset CSV, progress logs, and cache? [y/N]: ").strip().lower()
@@ -188,8 +184,8 @@ def main():
     # review subcommand
     subparsers.add_parser("review", help="Interactively review low-confidence track matches")
 
-    # audit subcommand
-    subparsers.add_parser("audit", help="Audit folder for duration mismatches and auto-remove wrong songs")
+    # reset / audit subcommand
+    subparsers.add_parser("reset", aliases=["audit", "resync"], help="Reset cache and failed tracks to download missing songs")
 
     # clean subcommand
     clean_parser = subparsers.add_parser("clean", help="Clean cache, logs, and temporary files")
@@ -216,8 +212,8 @@ def main():
         download_from_link(args.url)
     elif cmd == "review":
         run_review_mode()
-    elif cmd == "audit":
-        audit_and_fix_mismatched_tracks(force_delete=True)
+    elif cmd in ["reset", "audit", "resync"]:
+        reset_cache_and_failed_tracks()
     elif cmd == "clean":
         clean_project_cache(include_output=args.all)
     elif cmd == "status":

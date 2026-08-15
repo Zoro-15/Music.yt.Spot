@@ -99,141 +99,92 @@ def extract_artist_tag(audio_obj: Any) -> str:
     return ""
 
 
-def audit_and_fix_mismatched_tracks(force_delete: bool = False, reset_failed: bool = True) -> int:
+def reset_cache_and_failed_tracks() -> int:
     """
-    Audits downloaded tracks across output/ and Android Music folders against target metadata in tracks.csv.
-    Flags low-confidence matches and resets failed tracks for re-download retry without deleting existing files.
+    Clears search cache, failed track logs, and syncs progress.json with physical files on disk.
+    Tracks that are not physically present in the Android Music folder or output directory
+    are reset in the progress state so they will be downloaded when selecting Option 1.
+    Does NOT delete any existing music files.
     """
-    from downloader.utils import OUTPUT_DIR, find_android_music_dir, print_banner, sanitize_filename
-    from downloader.matcher import score_candidate, artist_match
+    from downloader.utils import OUTPUT_DIR, find_android_music_dir, print_banner, sanitize_filename, DATA_DIR, BASE_DIR
     from pathlib import Path
 
-    if not TRACKS_CSV.exists():
-        print("No tracks.csv found to audit. Please prepare a playlist CSV first.")
-        return 0
+    print_banner("Resetting Cache & Syncing Missing Tracks")
 
-    print_banner("Auditing Playlist & Resetting Failed Tracks")
-
-    target_map: Dict[str, Dict[str, Any]] = {}
-    with open(TRACKS_CSV, "r", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            target_map[str(row["index"])] = row
-
-    progress = load_progress()
-    mismatched_count = 0
-    failed_reset_count = 0
-
-    # 1. Reset failed tracks for re-download retry
-    if reset_failed:
-        failed_keys = [k for k, v in progress.items() if v.get("status") == "failed"]
-        for k in failed_keys:
-            del progress[k]
-            failed_reset_count += 1
-        if failed_reset_count > 0:
-            print(f" ✓ Reset {failed_reset_count} previously failed track(s) for download retry.")
-
-    try:
-        import mutagen
-    except ImportError:
-        mutagen = None
-
-    search_dirs: List[Path] = [OUTPUT_DIR]
-    android_dir = find_android_music_dir()
-    if android_dir and android_dir.exists() and android_dir.is_dir():
-        search_dirs.append(android_dir)
-
-    for idx, target in target_map.items():
-        title = target["title"]
-        target_artist = target.get("artist") or ""
-        target_dur = int(target.get("duration_sec") or 0)
-        safe_title = sanitize_filename(title)
-        filename_with_idx = f"{int(idx):03d} - {safe_title}"
-
-        # Search across output/ and Android Music folder
-        found_file: Optional[Path] = None
-        for d in search_dirs:
-            for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
-                p1 = d / f"{filename_with_idx}{ext}"
-                p2 = d / f"{safe_title}{ext}"
-                if p1.exists():
-                    found_file = p1
-                    break
-                elif p2.exists():
-                    found_file = p2
-                    break
-            if found_file:
-                break
-
-        is_mismatch = False
-        reason = ""
-
-        # Audit 1: Check actual audio duration & artist tags on disk via Mutagen
-        if found_file and found_file.exists() and mutagen is not None:
+    # 1. Remove failed and review log files
+    for f in [FAILED_FILE, REVIEW_FILE, DATA_DIR / "search_cache.json"]:
+        if f.exists():
             try:
-                audio_info = mutagen.File(found_file)
-                if audio_info:
-                    # Check duration
-                    if target_dur > 0 and hasattr(audio_info, "info") and hasattr(audio_info.info, "length"):
-                        actual_dur = int(audio_info.info.length)
-                        diff = abs(actual_dur - target_dur)
-                        if diff > 45 and (diff / max(target_dur, 1)) > 0.35:
-                            is_mismatch = True
-                            reason = f"Duration mismatch (File: {actual_dur // 60}:{actual_dur % 60:02d}, Target: {target_dur // 60}:{target_dur % 60:02d})"
-
-                    # Check artist tag
-                    if not is_mismatch and target_artist:
-                        file_artist = extract_artist_tag(audio_info)
-                        if file_artist and artist_match(target_artist, "", file_artist) == 0:
-                            is_mismatch = True
-                            reason = f"Artist tag mismatch on disk (File Artist: '{file_artist}', Target Artist: '{target_artist}')"
+                f.unlink()
+                print(f" ✓ Cleared: {f.name}")
             except Exception:
                 pass
 
-        # Audit 2: Re-evaluate recorded match in progress.json against updated matcher scoring
-        if not is_mismatch and idx in progress:
-            p_entry = progress[idx]
-            p_status = p_entry.get("status")
-            score = p_entry.get("score") or 100
-            yt_title = p_entry.get("youtube_title") or ""
-            yt_channel = p_entry.get("youtube_channel") or ""
+    # 2. Clear temporary download parts
+    for pat in ["*.tmp", "*.temp", "*.part", "*.ytdl"]:
+        for f in list(DATA_DIR.glob(pat)) + list(OUTPUT_DIR.glob(pat)):
+            if f.exists():
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
 
-            if p_status == "review" or score < 50:
-                is_mismatch = True
-                reason = f"Low confidence match score ({score}/100)"
-            elif yt_title and yt_channel and target_artist:
-                new_score = score_candidate(title, target_artist, yt_title, yt_channel, candidate_duration=target_dur, target_duration=target_dur)
-                if new_score < 50:
-                    is_mismatch = True
-                    reason = f"Re-evaluated match score failed quality threshold ({new_score}/100)"
+    # 3. Synchronize progress.json with verified files on disk
+    progress = load_progress()
+    music_dir = find_android_music_dir()
+    search_dirs: List[Path] = [OUTPUT_DIR]
+    if music_dir and music_dir.exists():
+        search_dirs.append(music_dir)
+        try:
+            for sub in music_dir.iterdir():
+                if sub.is_dir():
+                    search_dirs.append(sub)
+        except Exception:
+            pass
 
-        if is_mismatch:
-            mismatched_count += 1
-            print(f" ⚠️ Flagged Track #{idx} '{title}': {reason}")
-            if force_delete:
-                if found_file and found_file.exists():
-                    try:
-                        found_file.unlink()
-                        print(f"    ✓ Removed file: {found_file.name}")
-                        # Also remove corresponding lyrics (.lrc) and artwork sidecars
-                        for ext in [".lrc", ".jpg", ".jpeg", ".png", ".webp"]:
-                            sidecar = found_file.with_suffix(ext)
-                            if sidecar.exists():
-                                try:
-                                    sidecar.unlink()
-                                    print(f"    ✓ Removed related subtitle/artwork: {sidecar.name}")
-                                except Exception:
-                                    pass
-                    except Exception as e:
-                        print(f"    ✖ Could not remove {found_file.name}: {e}")
+    target_map: Dict[str, Dict[str, Any]] = {}
+    if TRACKS_CSV.exists():
+        with open(TRACKS_CSV, "r", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                target_map[str(row["index"])] = row
 
-                if idx in progress:
-                    del progress[idx]
+    reset_count = 0
+    verified_count = 0
 
-    total_reset = (mismatched_count if force_delete else 0) + failed_reset_count
-    if total_reset > 0:
-        save_progress(progress, force=True)
+    if target_map:
+        new_progress = {}
+        for idx, target in target_map.items():
+            safe_title = sanitize_filename(target["title"])
+            filename_with_idx = f"{int(idx):03d} - {safe_title}"
 
-    print(f"\nAudit complete. Found {mismatched_count} flagged track(s), reset {failed_reset_count} failed track(s).")
-    return total_reset
+            found = False
+            for d in search_dirs:
+                for ext in [".m4a", ".opus", ".mp3", ".aac", ".flac"]:
+                    p1 = d / f"{filename_with_idx}{ext}"
+                    p2 = d / f"{safe_title}{ext}"
+                    if (p1.exists() and p1.is_file() and p1.stat().st_size > 1000) or (p2.exists() and p2.is_file() and p2.stat().st_size > 1000):
+                        found = True
+                        break
+                if found:
+                    break
+
+            if found and idx in progress and progress[idx].get("status") == "success":
+                new_progress[idx] = progress[idx]
+                verified_count += 1
+            else:
+                reset_count += 1
+
+        save_progress(new_progress, force=True)
+    else:
+        if PROGRESS_FILE.exists():
+            try:
+                PROGRESS_FILE.unlink()
+            except Exception:
+                pass
+
+    print(f"\n ✓ Verified {verified_count} completed track(s) present in Music folder.")
+    print(f" ✓ Reset {reset_count} missing/failed track(s) in download queue.")
+    print("\n👉 Done! You can now select Option 1 in the Main Menu to download all missing tracks.")
+    return reset_count
 
 
