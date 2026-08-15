@@ -453,8 +453,16 @@ def process_and_finalize_audio(
                 pass
 
     from downloader.ffmpeg_tagger import apply_native_metadata, crop_square_artwork
-    from downloader.cover_art import fetch_high_res_cover
+    from downloader.cover_art import fetch_high_res_cover, crop_image_bytes_to_square
     from downloader.lyrics import fetch_lyrics
+
+    # Auto-discover local thumbnail if not in downloaded_files
+    if not thumb_files and OUTPUT_DIR.exists():
+        for ext in [".jpg", ".jpeg", ".png", ".webp"]:
+            cands = [p for p in OUTPUT_DIR.glob(f"*{ext}") if p.is_file() and p.stat().st_size > 500]
+            if cands:
+                thumb_files.extend(cands)
+                break
 
     if thumb_files and cfg.get("square_crop_artwork", True):
         crop_square_artwork(thumb_files[0])
@@ -462,17 +470,21 @@ def process_and_finalize_audio(
     cover_bytes = None
     if cfg.get("fetch_high_res_cover", True):
         cover_bytes = fetch_high_res_cover(title, artist, preferred_url=cover_url, video_url=video_url)
+        if cover_bytes:
+            cover_bytes = crop_image_bytes_to_square(cover_bytes)
 
     # Robust Fallback: If online APIs didn't return an image, use the downloaded local thumbnail!
     if not cover_bytes and thumb_files:
         for tf in thumb_files:
             if tf.exists() and tf.is_file() and tf.stat().st_size > 500:
                 try:
-                    cover_bytes = tf.read_bytes()
-                    if cover_bytes:
+                    raw_tb = tf.read_bytes()
+                    if raw_tb:
+                        cover_bytes = crop_image_bytes_to_square(raw_tb)
                         break
                 except Exception:
                     pass
+
 
     lyrics_text = None
     if cfg.get("fetch_lyrics", True):

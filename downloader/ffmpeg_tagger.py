@@ -97,6 +97,9 @@ def apply_native_metadata(
                         pic.mime = "image/webp"
                     else:
                         pic.mime = "image/jpeg"
+                    pic.width = 600
+                    pic.height = 600
+                    pic.depth = 24
 
                     if hasattr(audio, "add_picture"):
                         try:
@@ -107,9 +110,11 @@ def apply_native_metadata(
                     else:
                         pic_data = base64.b64encode(pic.write()).decode("ascii")
                         audio["METADATA_BLOCK_PICTURE"] = [pic_data]
+                        audio["metadata_block_picture"] = [pic_data]
 
                 audio.save()
                 return True, f"Applied {ext} Vorbis metadata & artwork"
+
 
         # Fallback for unrecognized extension
         return apply_spotify_metadata(audio_file, title, artist, album, image_bytes=image_bytes)

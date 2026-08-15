@@ -177,6 +177,8 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
             err_reason = err_lines[-1] if err_lines else lines[-1]
         return "failed", err_reason
 
+    new_files = list(set(OUTPUT_DIR.iterdir()) - before_files) if OUTPUT_DIR.exists() else []
+
     # Direct file lookup for downloaded audio and artwork
     downloaded = []
     for ext in [".m4a", ".opus", ".mp3", ".webm", ".aac", ".flac"]:
@@ -190,6 +192,12 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
             break
 
     if not downloaded:
+        for f in new_files:
+            if f.is_file() and f.suffix.lower() in [".m4a", ".opus", ".mp3", ".webm", ".aac", ".flac"] and f.stat().st_size > 1000:
+                downloaded.append(f)
+                break
+
+    if not downloaded:
         from downloader.utils import normalize
         norm_fn = normalize(filename)
         norm_title = normalize(safe_title)
@@ -200,16 +208,23 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
                         downloaded.append(p)
                         break
 
-    # Look for thumbnail artwork
-    for ext in [".jpg", ".jpeg", ".png", ".webp"]:
-        t = OUTPUT_DIR / f"{filename}{ext}"
-        if t.exists() and t.is_file():
-            downloaded.append(t)
+    # Look for thumbnail artwork from newly created files or filename match
+    for f in new_files:
+        if f.is_file() and f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"] and f.stat().st_size > 500:
+            downloaded.append(f)
             break
-        t_safe = OUTPUT_DIR / f"{safe_title}{ext}"
-        if t_safe.exists() and t_safe.is_file():
-            downloaded.append(t_safe)
-            break
+
+    if not any(f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"] for f in downloaded):
+        for ext in [".jpg", ".jpeg", ".png", ".webp"]:
+            t = OUTPUT_DIR / f"{filename}{ext}"
+            if t.exists() and t.is_file():
+                downloaded.append(t)
+                break
+            t_safe = OUTPUT_DIR / f"{safe_title}{ext}"
+            if t_safe.exists() and t_safe.is_file():
+                downloaded.append(t_safe)
+                break
+
 
     if not downloaded:
         err_msg = "Download stream missing"

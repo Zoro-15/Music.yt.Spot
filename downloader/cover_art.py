@@ -121,26 +121,53 @@ def fetch_deezer_cover_art(title: str, artist: str = "") -> Optional[bytes]:
 
 
 def fetch_youtube_cover_art(video_url_or_id: Optional[str]) -> Optional[bytes]:
-    """Fetches maximum resolution YouTube thumbnail given a URL or video ID."""
+    """Fetches maximum resolution YouTube thumbnail given a URL or video ID and crops to square."""
     if not video_url_or_id:
         return None
     vid_id = None
     if len(video_url_or_id) == 11 and re.match(r"^[a-zA-Z0-9_-]{11}$", video_url_or_id):
         vid_id = video_url_or_id
     else:
-        m = re.search(r"(?:v=|\/|youtu\.be\/)([a-zA-Z0-9_-]{11})", video_url_or_id)
+        m = re.search(r"(?:v=|\/|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})", video_url_or_id)
         if m:
             vid_id = m.group(1)
 
     if not vid_id:
         return None
 
-    for res in ["maxresdefault.jpg", "sddefault.jpg", "hqdefault.jpg"]:
+    for res in ["maxresdefault.jpg", "sddefault.jpg", "hqdefault.jpg", "0.jpg", "hq720.jpg"]:
         url = f"https://i.ytimg.com/vi/{vid_id}/{res}"
         img = download_image_bytes(url)
         if img:
-            return img
+            return crop_image_bytes_to_square(img)
     return None
+
+
+def crop_image_bytes_to_square(image_bytes: bytes) -> bytes:
+    """Crops raw image bytes to a 1:1 square aspect ratio using FFmpeg."""
+    if not image_bytes or len(image_bytes) < 1000:
+        return image_bytes
+    try:
+        import uuid
+        from downloader.utils import OUTPUT_DIR, run_command
+        in_tmp = OUTPUT_DIR / f"crop_in_{uuid.uuid4().hex[:6]}.jpg"
+        out_tmp = OUTPUT_DIR / f"crop_out_{uuid.uuid4().hex[:6]}.jpg"
+        in_tmp.write_bytes(image_bytes)
+        code, _, _ = run_command(["ffmpeg", "-y", "-i", str(in_tmp), "-vf", "crop='min(iw,ih):min(iw,ih)'", str(out_tmp)])
+        if code == 0 and out_tmp.exists() and out_tmp.stat().st_size > 500:
+            result = out_tmp.read_bytes()
+            if in_tmp.exists():
+                in_tmp.unlink()
+            if out_tmp.exists():
+                out_tmp.unlink()
+            return result
+        if in_tmp.exists():
+            in_tmp.unlink()
+        if out_tmp.exists():
+            out_tmp.unlink()
+    except Exception:
+        pass
+    return image_bytes
 
 
 def fetch_high_res_cover(
@@ -153,8 +180,7 @@ def fetch_high_res_cover(
     Multi-Tier HD Cover Art Retriever:
     1. Preferred URL (e.g. Spotify CDN 640x640)
     2. Apple iTunes HD Search API (1400x1400) with global & regional IN store
-    3. Deezer HD Search API (1000x1000)
-    4. YouTube High-Res Thumbnail (maxresdefault.jpg)
+    3. YouTube Maximum Resolution Thumbnail (maxresdefault.jpg, cropped to square)
     """
     # Tier 1: Preferred URL (Spotify / Direct)
     if preferred_url:
@@ -167,17 +193,13 @@ def fetch_high_res_cover(
     if img:
         return img
 
-    # Tier 3: Deezer Search API (HD 1000x1000)
-    img = fetch_deezer_cover_art(title, artist)
-    if img:
-        return img
-
-    # Tier 4: YouTube Thumbnail URL
+    # Tier 3: YouTube High-Res Thumbnail
     if video_url:
         img = fetch_youtube_cover_art(video_url)
         if img:
             return img
 
     return None
+
 
 
