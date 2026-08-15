@@ -105,7 +105,8 @@ def get_ytdlp_auth_args() -> List[str]:
 def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
     """
     Returns native audio extraction and format selection flags for yt-dlp.
-    Includes primary format selectors with multi-tiered fallback (m4a -> opus -> any best audio).
+    Prioritizes YouTube's highest quality native Opus stream (~160kbps format 251)
+    with fallback to M4A (AAC) if Opus is unavailable.
     """
     if cfg is None:
         try:
@@ -117,12 +118,10 @@ def get_audio_quality_args(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
     fmt = str(cfg.get("audio_format", "best_native")).lower()
 
     if fmt in ["m4a", "aac"]:
-        return ["-f", "ba[ext=m4a]/ba[ext=aac]/ba/b", "-x", "--audio-format", "m4a", "--audio-quality", "0"]
-    elif fmt in ["opus", "webm"]:
-        return ["-f", "ba[ext=opus]/ba[ext=webm]/ba[ext=m4a]/ba/b", "-x", "--audio-format", "opus", "--audio-quality", "0"]
+        return ["-x", "--audio-format", "m4a", "--audio-quality", "0"]
     else:
-        # best_native: prioritize best direct native stream (m4a or opus/webm) with fallback to any available audio
-        return ["-f", "ba[ext=m4a]/ba[ext=opus]/ba[ext=webm]/ba/bestaudio/b"]
+        # Default (best_native) & opus: Prioritize YouTube's highest bitrate native Opus audio stream
+        return ["-x", "--audio-format", "opus", "--audio-quality", "0"]
 
 
 

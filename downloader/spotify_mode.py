@@ -177,27 +177,47 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
             err_reason = err_lines[-1] if err_lines else lines[-1]
         return "failed", err_reason
 
-    # Safely find downloaded files without glob bracket issues
-    after_files = set(OUTPUT_DIR.iterdir()) if OUTPUT_DIR.exists() else set()
-    new_files = [p for p in (after_files - before_files) if p.is_file()]
-    audio_new = [p for p in new_files if p.suffix.lower() in [".m4a", ".webm", ".opus", ".mp3", ".aac", ".flac"]]
+    # Direct file lookup for downloaded audio and artwork
+    downloaded = []
+    for ext in [".m4a", ".opus", ".mp3", ".webm", ".aac", ".flac"]:
+        p = OUTPUT_DIR / f"{filename}{ext}"
+        if p.exists() and p.is_file() and p.stat().st_size > 1000:
+            downloaded.append(p)
+            break
+        p_safe = OUTPUT_DIR / f"{safe_title}{ext}"
+        if p_safe.exists() and p_safe.is_file() and p_safe.stat().st_size > 1000:
+            downloaded.append(p_safe)
+            break
 
-    if audio_new:
-        downloaded = new_files
-    else:
+    if not downloaded:
         from downloader.utils import normalize
         norm_fn = normalize(filename)
         norm_title = normalize(safe_title)
-        downloaded = [
-            p for p in OUTPUT_DIR.iterdir()
-            if p.is_file() and (
-                p.stem == filename
-                or p.name.startswith(f"{filename}.")
-                or p.stem == safe_title
-                or p.name.startswith(f"{safe_title}.")
-                or normalize(p.stem) in [norm_fn, norm_title]
-            )
-        ]
+        for p in OUTPUT_DIR.iterdir():
+            if p.is_file() and p.suffix.lower() in [".m4a", ".opus", ".mp3", ".webm", ".aac", ".flac"]:
+                if p.stem == filename or p.stem == safe_title or normalize(p.stem) in [norm_fn, norm_title]:
+                    if p.stat().st_size > 1000:
+                        downloaded.append(p)
+                        break
+
+    # Look for thumbnail artwork
+    for ext in [".jpg", ".jpeg", ".png", ".webp"]:
+        t = OUTPUT_DIR / f"{filename}{ext}"
+        if t.exists() and t.is_file():
+            downloaded.append(t)
+            break
+        t_safe = OUTPUT_DIR / f"{safe_title}{ext}"
+        if t_safe.exists() and t_safe.is_file():
+            downloaded.append(t_safe)
+            break
+
+    if not downloaded:
+        err_msg = "Download stream missing"
+        if stderr and stderr.strip():
+            lines = [l.strip() for l in stderr.strip().splitlines() if l.strip()]
+            err_lines = [l for l in lines if "ERROR:" in l or "HTTP Error" in l or "WARNING:" in l]
+            err_msg = err_lines[-1] if err_lines else lines[-1]
+        return "failed", err_msg
 
     from downloader.utils import process_and_finalize_audio
 
