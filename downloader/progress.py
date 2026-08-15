@@ -120,7 +120,21 @@ def reset_cache_and_failed_tracks() -> int:
             except Exception:
                 pass
 
-    # 2. Clear temporary download parts
+    # 2. Clear output/ directory completely to prevent stale files
+    if OUTPUT_DIR.exists():
+        for item in OUTPUT_DIR.glob("*"):
+            if item.name != ".gitkeep":
+                try:
+                    if item.is_file():
+                        item.unlink()
+                    elif item.is_dir():
+                        import shutil
+                        shutil.rmtree(item)
+                except Exception:
+                    pass
+        print(" ✓ Cleared output folder files")
+
+    # 3. Clear temporary download parts
     for pat in ["*.tmp", "*.temp", "*.part", "*.ytdl"]:
         for f in list(DATA_DIR.glob(pat)) + list(OUTPUT_DIR.glob(pat)):
             if f.exists():
@@ -129,11 +143,11 @@ def reset_cache_and_failed_tracks() -> int:
                 except Exception:
                     pass
 
-    # 3. Synchronize progress.json with verified files on disk
+    # 4. Synchronize progress.json strictly against physical Android Music folder
     progress = load_progress()
     music_dir = find_android_music_dir()
-    search_dirs: List[Path] = [OUTPUT_DIR]
-    if music_dir and music_dir.exists():
+    search_dirs: List[Path] = []
+    if music_dir and music_dir.exists() and music_dir.is_dir():
         search_dirs.append(music_dir)
         try:
             for sub in music_dir.iterdir():

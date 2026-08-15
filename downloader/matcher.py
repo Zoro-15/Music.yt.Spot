@@ -32,8 +32,8 @@ def _save_search_cache(cache: Dict[str, Any]) -> None:
 
 def search_youtube_entries(query: str, count: int = SEARCH_COUNT, use_ytmusic: bool = False) -> List[Dict[str, Any]]:
     """Fetches YouTube search entries using yt-dlp Python API or subprocess CLI fallback."""
-    search_query = f"{query} Official Audio" if use_ytmusic else query
-    cache_key = f"ytsearch_{query}__{count}"
+    clean_q = query.strip()
+    cache_key = f"ytsearch_{clean_q}__{count}"
     with _search_cache_lock:
         cache = _load_search_cache()
         if cache_key in cache:
@@ -53,19 +53,15 @@ def search_youtube_entries(query: str, count: int = SEARCH_COUNT, use_ytmusic: b
             "ignoreerrors": True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            res = ydl.extract_info(f"ytsearch{count}:{search_query}", download=False)
+            res = ydl.extract_info(f"ytsearch{count}:{clean_q}", download=False)
             if res and "entries" in res:
                 entries = [e for e in res["entries"] if e and isinstance(e, dict)]
     except Exception:
         entries = []
 
-    # Fallback to general query if official audio suffix returned nothing
-    if not entries and use_ytmusic:
-        return search_youtube_entries(query, count=count, use_ytmusic=False)
-
     # 2. Subprocess CLI fallback if Python API failed or returned empty
     if not entries:
-        cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", f"ytsearch{count}:{query}"]
+        cmd = ["yt-dlp", "--flat-playlist", "--dump-single-json", f"ytsearch{count}:{clean_q}"]
         code, stdout, _ = run_command(cmd)
         if code == 0 and stdout.strip():
             try:
@@ -78,6 +74,9 @@ def search_youtube_entries(query: str, count: int = SEARCH_COUNT, use_ytmusic: b
         with _search_cache_lock:
             c = _load_search_cache()
             c[cache_key] = entries
+            _save_search_cache(c)
+
+    return entries
             _save_search_cache(c)
 
     return entries
@@ -223,6 +222,10 @@ def search_youtube(
     if artists:
         queries.append(f"{artists} {title}")
         queries.append(f"{artists} - {title} Topic")
+        queries.append(f"{title} {artists}")
+        primary_artist = artists.split(",")[0].strip()
+        if primary_artist and primary_artist != artists:
+            queries.append(f"{primary_artist} {title}")
     else:
         queries.append(f"{title} Official Audio")
         queries.append(title)
