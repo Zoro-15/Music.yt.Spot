@@ -149,6 +149,7 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
     filename = f"{index:03d} - {safe_title}" if cfg.get("include_index_in_filename", False) else safe_title
     output_template = str(OUTPUT_DIR / f"{filename}.%(ext)s")
     before_files = set(OUTPUT_DIR.iterdir()) if OUTPUT_DIR.exists() else set()
+    audio_args = get_audio_quality_args(cfg)
 
     cmd = ["yt-dlp", "--no-playlist", "--retries", "5", "--fragment-retries", "5", "--retry-sleep", "2", "--socket-timeout", "30", "--continue"] + audio_args + ["--write-thumbnail", "--convert-thumbnails", "jpg"] + get_ytdlp_auth_args() + ["-o", output_template, best["url"]]
     code, stdout, stderr = run_command(cmd)
@@ -295,13 +296,23 @@ def _run_download_impl(cfg: Dict[str, Any]) -> None:
 
             def worker_task(row: Dict[str, str]) -> None:
                 idx = int(row["index"])
-                status, result = process_single_track(row, idx, cfg)
+                try:
+                    status, result = process_single_track(row, idx, cfg)
+                except Exception as e:
+                    status, result = "failed", f"Error: {e}"
+
                 with progress_lock:
                     key = str(idx)
                     if status == "success":
                         progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "success"}
+                        chan = ""
+                        sc = 100
                         if isinstance(result, dict):
                             progress[key].update({"youtube_title": result.get("title"), "youtube_channel": result.get("channel"), "youtube_url": result.get("url"), "score": result.get("score")})
+                            chan = result.get("channel") or ""
+                            sc = result.get("score") or 100
+                        info_str = f" [dim]({chan} • Score {sc})[/dim]" if chan else ""
+                        prg.console.print(f"[bold green]✓ [{idx:03d}][/bold green] '{row['title']}' by {row['artist']}{info_str}")
                     elif status == "failed":
                         reason_str = str(result)
                         progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "failed", "reason": reason_str}
@@ -320,28 +331,32 @@ def _run_download_impl(cfg: Dict[str, Any]) -> None:
                 for f in as_completed(futures):
                     try:
                         f.result()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Worker Error: {e}")
     else:
         def worker_task(row: Dict[str, str]) -> None:
             idx = int(row["index"])
-            status, result = process_single_track(row, idx, cfg)
+            try:
+                status, result = process_single_track(row, idx, cfg)
+            except Exception as e:
+                status, result = "failed", f"Error: {e}"
+
             with progress_lock:
                 key = str(idx)
                 if status == "success":
                     progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "success"}
                     if isinstance(result, dict):
                         progress[key].update({"youtube_title": result.get("title"), "youtube_channel": result.get("channel"), "youtube_url": result.get("url"), "score": result.get("score")})
-                    print(f"[{idx:03d}] SUCCESS: '{row['title']}'")
+                    print(f"✓ [{idx:03d}] SUCCESS: '{row['title']}' by {row['artist']}")
                 elif status == "failed":
                     reason_str = str(result)
                     progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "failed", "reason": reason_str}
                     log_failed(idx, row["title"], row["artist"], reason_str)
-                    print(f"[{idx:03d}] FAILED: '{row['title']}' — Reason: {reason_str}")
+                    print(f"✖ [{idx:03d}] FAILED: '{row['title']}' — Reason: {reason_str}")
                 elif status == "review" and isinstance(result, dict):
                     progress[key] = {"title": row["title"], "artist": row["artist"], "album": row.get("album", ""), "status": "review", "youtube_title": result.get("title"), "youtube_channel": result.get("channel"), "youtube_url": result.get("url"), "score": result.get("score")}
                     log_review(idx, row["title"], row["artist"], result.get("score"), result.get("title"), result.get("url"))
-                    print(f"[{idx:03d}] REVIEW (Score {result.get('score')}): '{row['title']}' — Matched: '{result.get('title')}'")
+                    print(f"⚠ [{idx:03d}] REVIEW (Score {result.get('score')}): '{row['title']}' — Matched: '{result.get('title')}'")
 
                 save_progress(progress)
 
@@ -350,12 +365,11 @@ def _run_download_impl(cfg: Dict[str, Any]) -> None:
             for f in as_completed(futures):
                 try:
                     f.result()
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"Worker Error: {e}")
 
-    # Auto-generate .m3u8 playlist file
-    all_audios = list(OUTPUT_DIR.glob("*.*"))
-    generate_m3u8_playlist("Spotify Playlist", all_audios)
+    # Auto-generate .m3u8 playlist file in Music directory
+    generate_m3u8_playlist("Spotify Playlist")
     print_banner("PLAYLIST PROCESSING COMPLETE")
 
     # Post-download failure summary report
