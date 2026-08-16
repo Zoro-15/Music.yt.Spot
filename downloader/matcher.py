@@ -105,6 +105,7 @@ def similarity(title: str, candidate: str) -> float:
 def artist_match(artists: str, candidate_title: str, candidate_channel: str) -> int:
     """Evaluates artist presence in candidate title or channel name."""
     haystack = normalize(f"{candidate_title} {candidate_channel}")
+    haystack_nospace = haystack.replace(" ", "")
     score = 0
 
     if not artists:
@@ -119,6 +120,9 @@ def artist_match(artists: str, candidate_title: str, candidate_channel: str) -> 
 
         if artist_norm in haystack:
             score += 30
+        elif artist_norm.replace(" ", "") and artist_norm.replace(" ", "") in haystack_nospace:
+            # Handles PascalCase / VEVO channel names (e.g. PostMaloneVEVO, TheWeekndVEVO)
+            score += 25
         else:
             artist_w = words(artist)
             if artist_w:

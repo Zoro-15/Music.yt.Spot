@@ -1,9 +1,18 @@
 import os
 import re
+import sys
 import subprocess
 import unicodedata
 from pathlib import Path
 from typing import Optional, List, Tuple, Set, Dict, Any
+
+# Ensure UTF-8 output encoding across Windows / Linux / Termux terminals
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # ============================================================
 # PROJECT DIRECTORIES
@@ -456,12 +465,17 @@ def process_and_finalize_audio(
     from downloader.cover_art import fetch_high_res_cover, crop_image_bytes_to_square
     from downloader.lyrics import fetch_lyrics
 
-    # Auto-discover local thumbnail if not in downloaded_files
+    # Auto-discover local thumbnail if not in downloaded_files strictly matching this track
+    safe_t = sanitize_filename(title)
     if not thumb_files and OUTPUT_DIR.exists():
         for ext in [".jpg", ".jpeg", ".png", ".webp"]:
-            cands = [p for p in OUTPUT_DIR.glob(f"*{ext}") if p.is_file() and p.stat().st_size > 500]
-            if cands:
-                thumb_files.extend(cands)
+            cand1 = OUTPUT_DIR / f"{safe_t}{ext}"
+            cand2 = OUTPUT_DIR / f"{audio.stem}{ext}"
+            if cand1.exists() and cand1.is_file() and cand1.stat().st_size > 500:
+                thumb_files.append(cand1)
+                break
+            elif cand2.exists() and cand2.is_file() and cand2.stat().st_size > 500:
+                thumb_files.append(cand2)
                 break
 
     if thumb_files and cfg.get("square_crop_artwork", True):
@@ -484,7 +498,6 @@ def process_and_finalize_audio(
                         break
                 except Exception:
                     pass
-
 
     lyrics_text = None
     if cfg.get("fetch_lyrics", True):
@@ -521,12 +534,13 @@ def process_and_finalize_audio(
                 pass
             audio = dest_file
 
-        for t in thumb_files:
-            try:
-                if t.exists():
-                    t.unlink()
-            except Exception:
-                pass
+    # Clean up local thumbnail files to avoid stale images in OUTPUT_DIR
+    for t in thumb_files:
+        try:
+            if t.exists():
+                t.unlink()
+        except Exception:
+            pass
 
     return True, audio, "Processed successfully"
 

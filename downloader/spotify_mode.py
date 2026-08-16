@@ -177,9 +177,11 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
             err_reason = err_lines[-1] if err_lines else lines[-1]
         return "failed", err_reason
 
-    new_files = list(set(OUTPUT_DIR.iterdir()) - before_files) if OUTPUT_DIR.exists() else []
+    from downloader.utils import normalize
+    norm_fn = normalize(filename)
+    norm_title = normalize(safe_title)
 
-    # Direct file lookup for downloaded audio and artwork
+    # Direct file lookup for downloaded audio strictly matching this track
     downloaded = []
     for ext in [".m4a", ".opus", ".mp3", ".webm", ".aac", ".flac"]:
         p = OUTPUT_DIR / f"{filename}{ext}"
@@ -194,36 +196,38 @@ def process_single_track(row: Dict[str, str], index: int, cfg: Dict[str, Any]) -
     if not downloaded:
         for f in new_files:
             if f.is_file() and f.suffix.lower() in [".m4a", ".opus", ".mp3", ".webm", ".aac", ".flac"] and f.stat().st_size > 1000:
-                downloaded.append(f)
-                break
+                f_stem_norm = normalize(f.stem)
+                if f.stem in [filename, safe_title] or f_stem_norm in [norm_fn, norm_title] or f.name.startswith(f"{index:03d} - "):
+                    downloaded.append(f)
+                    break
 
     if not downloaded:
-        from downloader.utils import normalize
-        norm_fn = normalize(filename)
-        norm_title = normalize(safe_title)
         for p in OUTPUT_DIR.iterdir():
             if p.is_file() and p.suffix.lower() in [".m4a", ".opus", ".mp3", ".webm", ".aac", ".flac"]:
-                if p.stem == filename or p.stem == safe_title or normalize(p.stem) in [norm_fn, norm_title]:
+                f_stem_norm = normalize(p.stem)
+                if p.stem in [filename, safe_title] or f_stem_norm in [norm_fn, norm_title] or p.name.startswith(f"{index:03d} - "):
                     if p.stat().st_size > 1000:
                         downloaded.append(p)
                         break
 
-    # Look for thumbnail artwork from newly created files or filename match
-    for f in new_files:
-        if f.is_file() and f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"] and f.stat().st_size > 500:
-            downloaded.append(f)
+    # Look for thumbnail artwork strictly matching this track
+    for ext in [".jpg", ".jpeg", ".png", ".webp"]:
+        t = OUTPUT_DIR / f"{filename}{ext}"
+        if t.exists() and t.is_file() and t.stat().st_size > 500:
+            downloaded.append(t)
+            break
+        t_safe = OUTPUT_DIR / f"{safe_title}{ext}"
+        if t_safe.exists() and t_safe.is_file() and t_safe.stat().st_size > 500:
+            downloaded.append(t_safe)
             break
 
     if not any(f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"] for f in downloaded):
-        for ext in [".jpg", ".jpeg", ".png", ".webp"]:
-            t = OUTPUT_DIR / f"{filename}{ext}"
-            if t.exists() and t.is_file():
-                downloaded.append(t)
-                break
-            t_safe = OUTPUT_DIR / f"{safe_title}{ext}"
-            if t_safe.exists() and t_safe.is_file():
-                downloaded.append(t_safe)
-                break
+        for f in new_files:
+            if f.is_file() and f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"] and f.stat().st_size > 500:
+                f_stem_norm = normalize(f.stem)
+                if f.stem in [filename, safe_title] or f_stem_norm in [norm_fn, norm_title] or f.name.startswith(f"{index:03d} - "):
+                    downloaded.append(f)
+                    break
 
 
     if not downloaded:

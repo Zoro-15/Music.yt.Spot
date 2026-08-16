@@ -5,6 +5,13 @@ Unified CLI Entrypoint for Termux Playlist Audio Downloader.
 
 import sys
 import argparse
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 from downloader.spotify_mode import prepare_csv, run_download
 from downloader.search_mode import search_and_download_song
 from downloader.youtube_mode import download_from_link

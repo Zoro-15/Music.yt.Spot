@@ -1,7 +1,19 @@
 import csv
 import json
-from typing import Dict, Any, Union
-from downloader.utils import PROGRESS_FILE, TRACKS_CSV, FAILED_FILE, REVIEW_FILE
+from pathlib import Path
+from typing import Dict, Any, Union, List, Optional
+from downloader.utils import (
+    PROGRESS_FILE,
+    TRACKS_CSV,
+    FAILED_FILE,
+    REVIEW_FILE,
+    DATA_DIR,
+    OUTPUT_DIR,
+    BASE_DIR,
+    find_android_music_dir,
+    print_banner,
+    sanitize_filename,
+)
 
 
 def load_progress() -> Dict[str, Dict[str, Any]]:
@@ -106,9 +118,6 @@ def reset_cache_and_failed_tracks() -> int:
     are reset in the progress state so they will be downloaded when selecting Option 1.
     Does NOT delete any existing music files.
     """
-    from downloader.utils import OUTPUT_DIR, find_android_music_dir, print_banner, sanitize_filename, DATA_DIR, BASE_DIR
-    from pathlib import Path
-
     print_banner("Resetting Cache & Syncing Missing Tracks")
 
     # 1. Remove failed and review log files
